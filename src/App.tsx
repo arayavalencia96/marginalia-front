@@ -3,6 +3,8 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './features/auth/AuthContext'
 import { AccountSettingsPage } from './features/auth/AccountSettingsPage'
+import { BooksListPage } from './features/books/BooksListPage'
+import { BookDetailPage } from './features/books/BookDetailPage'
 import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage'
 import { LoginPage } from './features/auth/LoginPage'
 import { OAuthCallbackPage } from './features/auth/OAuthCallbackPage'
@@ -32,7 +34,8 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify" element={<VerifyAccountPage />} />
             <Route element={<ProtectedRoute />}>
-              <Route path="/books" element={<h1>My Books</h1>} />
+              <Route path="/books" element={<BooksListPage />} />
+              <Route path="/books/:bookId" element={<BookDetailPage />} />
               <Route path="/account" element={<AccountSettingsPage />} />
             </Route>
           </Routes>
