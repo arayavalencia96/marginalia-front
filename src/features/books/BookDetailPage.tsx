@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router-dom'
 import { z } from 'zod'
 import { createChapter, deleteChapter, getBookChapters, updateChapter } from '../../api/chapters'
+import { ChapterContentPanel } from '../blocks/ChapterContentPanel'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import type { ChapterRequest, ChapterResponse } from '../../types/chapter'
 
@@ -360,7 +361,9 @@ export function BookDetailPage() {
           {reorderChapterMutation.isError && <p className="mx-2 mb-3 rounded bg-red-50 px-2 py-1 text-xs text-red-700" role="alert">{getApiErrorMessage(reorderChapterMutation.error)}</p>}
           {chaptersQuery.data && chaptersQuery.data.length > 0 && <DndContext collisionDetection={closestCenter} onDragCancel={() => setDraggedChapterId(undefined)} onDragEnd={handleDragEnd} onDragStart={(event) => setDraggedChapterId(String(event.active.id))} sensors={sensors}><ChapterTree {...treeProps} parentChapterId={null} /></DndContext>}
         </aside>
-        <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">{selectedChapterId ? 'El capítulo seleccionado está resaltado en el índice. Su contenido se incorporará en la próxima fase.' : 'Selecciona un capítulo del índice para resaltarlo.'}</section>
+        {selectedChapterId
+          ? <ChapterContentPanel chapterId={selectedChapterId} />
+          : <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">Selecciona un capítulo del índice para ver su contenido.</section>}
       </div>
 
       {createParentChapterId !== undefined && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="presentation"><section aria-labelledby="create-chapter-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog"><h2 className="text-xl font-semibold text-slate-900" id="create-chapter-title">{createParentChapterId ? 'Agregar subcapítulo' : 'Agregar capítulo'}</h2>{createParentTitle && <p className="mt-1 text-sm text-slate-600">Dentro de: {createParentTitle}</p>}<form className="mt-6 space-y-4" noValidate onSubmit={createForm.handleSubmit(({ title }) => createChapterMutation.mutate({ title, parentChapterId: createParentChapterId }))}><div><label className="block text-sm font-medium text-slate-700" htmlFor="chapter-title">Título</label><input autoFocus className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="chapter-title" aria-invalid={Boolean(createForm.formState.errors.title)} {...createForm.register('title')} />{createForm.formState.errors.title && <p className="mt-1 text-sm text-red-600">{createForm.formState.errors.title.message}</p>}</div>{createChapterMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(createChapterMutation.error)}</p>}<div className="flex justify-end gap-3"><button className="rounded-md px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" disabled={createChapterMutation.isPending} onClick={closeCreateChapter} type="button">Cancelar</button><button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-400" disabled={createChapterMutation.isPending} type="submit">{createChapterMutation.isPending ? 'Creando...' : 'Crear'}</button></div></form></section></div>}
