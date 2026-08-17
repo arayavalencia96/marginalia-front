@@ -271,7 +271,8 @@ export function ChapterContentPanel({ chapterId }: { chapterId: string }) {
     })),
     onError: (error, { blockId }) => setUploadErrorsByBlockId((current) => ({ ...current, [blockId]: getApiErrorMessage(error) })),
     onSettled: (_data, _error, { blockId }) => setUploadProgressByBlockId((current) => {
-      const { [blockId]: _completedUpload, ...remainingUploads } = current
+      const remainingUploads = { ...current }
+      delete remainingUploads[blockId]
       return remainingUploads
     }),
   })
