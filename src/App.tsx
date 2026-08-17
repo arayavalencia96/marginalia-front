@@ -6,6 +6,7 @@ import { AccountSettingsPage } from './features/auth/AccountSettingsPage'
 import { BooksListPage } from './features/books/BooksListPage'
 import { BookDetailPage } from './features/books/BookDetailPage'
 import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage'
+import { GoodbyePage } from './features/auth/GoodbyePage'
 import { LoginPage } from './features/auth/LoginPage'
 import { OAuthCallbackPage } from './features/auth/OAuthCallbackPage'
 import { RegisterPage } from './features/auth/RegisterPage'
@@ -29,6 +30,7 @@ function App() {
             />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/goodbye" element={<GoodbyePage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
             <Route path="/register" element={<RegisterPage />} />
