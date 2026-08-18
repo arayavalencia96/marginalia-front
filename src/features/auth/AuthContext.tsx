@@ -6,9 +6,10 @@ import {
   type PropsWithChildren,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { logout, refreshSession } from '../../api/auth'
 import { registerSessionExpiredHandler } from '../../lib/authSession'
 import { authTokenStore } from '../../lib/authTokenStore'
-import type { AuthenticatedUser, AuthTokens } from '../../types/auth'
+import type { AuthenticatedUser } from '../../types/auth'
 import { authContext, type AuthContextValue } from './authContextDefinition'
 
 interface AccessTokenPayload {
@@ -41,44 +42,66 @@ function getUserFromAccessToken(accessToken: string): AuthenticatedUser | undefi
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const navigate = useNavigate()
-  const [user, setUser] = useState<AuthenticatedUser | undefined>(() => {
-    const accessToken = authTokenStore.getAccessToken()
-    return accessToken ? getUserFromAccessToken(accessToken) : undefined
-  })
+  const [user, setUser] = useState<AuthenticatedUser>()
+  const [isInitializing, setIsInitializing] = useState(true)
 
-  const signIn = useCallback((tokens: AuthTokens): void => {
-    authTokenStore.set(tokens)
-    setUser(getUserFromAccessToken(tokens.accessToken))
-  }, [])
-
-  const signInWithAccessToken = useCallback((accessToken: string): void => {
-    authTokenStore.updateAccessToken(accessToken)
-    setUser(getUserFromAccessToken(accessToken))
-  }, [])
-
-  const signOut = useCallback((): void => {
+  const clearSession = useCallback((): void => {
     authTokenStore.clear()
     setUser(undefined)
   }, [])
 
+  const signIn = useCallback((accessToken: string): void => {
+    authTokenStore.set(accessToken)
+    setUser(getUserFromAccessToken(accessToken))
+  }, [])
+
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      await logout()
+    } finally {
+      clearSession()
+    }
+  }, [clearSession])
+
+  useEffect(() => {
+    let isCurrent = true
+
+    const restoreSession = async (): Promise<void> => {
+      try {
+        const { accessToken } = await refreshSession()
+        if (isCurrent) signIn(accessToken)
+      } catch {
+        if (isCurrent) clearSession()
+      } finally {
+        if (isCurrent) setIsInitializing(false)
+      }
+    }
+
+    void restoreSession()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [clearSession, signIn])
+
   useEffect(
     () =>
       registerSessionExpiredHandler(() => {
-        signOut()
+        clearSession()
         navigate('/login', { replace: true })
       }),
-    [navigate, signOut],
+    [clearSession, navigate],
   )
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isAuthenticated: Boolean(user),
+      isInitializing,
       signIn,
-      signInWithAccessToken,
       signOut,
     }),
-    [signIn, signInWithAccessToken, signOut, user],
+    [isInitializing, signIn, signOut, user],
   )
 
   return <authContext.Provider value={value}>{children}</authContext.Provider>

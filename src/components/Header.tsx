@@ -6,10 +6,10 @@ import { ThemeToggle } from './ThemeToggle'
 
 export function Header() {
   const navigate = useNavigate()
-  const { isAuthenticated, signOut, user } = useAuth()
+  const { isAuthenticated, isInitializing, signOut, user } = useAuth()
 
-  function handleSignOut(): void {
-    signOut()
+  async function handleSignOut(): Promise<void> {
+    await signOut()
     toast.info('Sesión cerrada correctamente.')
     navigate('/', { replace: true })
   }
@@ -31,10 +31,12 @@ export function Header() {
 
         <div className="header-actions">
           <ThemeToggle />
-          {isAuthenticated ? (
+          {isInitializing ? (
+            <span className="user-email" role="status">Verificando sesión...</span>
+          ) : isAuthenticated ? (
             <>
               <span className="user-email" title={user?.email}>{user?.email}</span>
-              <button className="button button-ghost button-small" onClick={handleSignOut} type="button">Cerrar sesión</button>
+              <button className="button button-ghost button-small" onClick={() => void handleSignOut()} type="button">Cerrar sesión</button>
             </>
           ) : (
             <>

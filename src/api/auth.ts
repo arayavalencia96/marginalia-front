@@ -71,3 +71,12 @@ export async function refreshSession(): Promise<RefreshResponse> {
   const { data } = await apiClient.post<RefreshResponse>('/api/auth/refresh')
   return data
 }
+
+/**
+ * Revokes the browser refresh credential and clears its HttpOnly cookie.
+ *
+ * @returns A promise that resolves after the server closes the session.
+ */
+export async function logout(): Promise<void> {
+  await apiClient.post('/api/auth/logout')
+}

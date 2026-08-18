@@ -47,8 +47,8 @@ export function AccountSettingsPage() {
   const changePasswordMutation = useMutation({
     mutationFn: changePassword,
     meta: { successMessage: 'Contraseña actualizada correctamente.' },
-    onSuccess: () => {
-      signOut()
+    onSuccess: async () => {
+      await signOut()
       navigate('/login', { replace: true, state: { successMessage: 'Contraseña actualizada. Inicia sesión nuevamente.' } })
     },
   })
@@ -58,8 +58,8 @@ export function AccountSettingsPage() {
       pendingMessage: 'El nuevo correo requerirá una verificación.',
       successMessage: 'Correo actualizado. Completa la nueva verificación.',
     },
-    onSuccess: (_response, request) => {
-      signOut()
+    onSuccess: async (_response, request) => {
+      await signOut()
       navigate('/verify', { replace: true, state: { email: request.newEmail } })
     },
   })
@@ -67,8 +67,8 @@ export function AccountSettingsPage() {
   const deleteAccountMutation = useMutation({
     mutationFn: deleteAccount,
     meta: { successMessage: 'Tu cuenta fue dada de baja.' },
-    onSuccess: () => {
-      signOut()
+    onSuccess: async () => {
+      await signOut()
       navigate('/goodbye', { replace: true })
     },
   })

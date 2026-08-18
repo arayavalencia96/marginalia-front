@@ -48,13 +48,12 @@ const attachAccessToken = (
 /**
  * Obtains a fresh access token, sharing an in-flight refresh request across callers.
  *
- * @param refreshToken - The optional refresh token held in the in-memory session.
  * @returns A promise resolving to the new access token.
  */
-function refreshAccessToken(refreshToken: string | undefined): Promise<string> {
+function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = refreshClient
-      .post<RefreshResponse>('/api/auth/refresh', refreshToken ? { refreshToken } : undefined)
+      .post<RefreshResponse>('/api/auth/refresh')
       .then(({ data }) => data.accessToken)
       .finally(() => {
         refreshPromise = undefined
@@ -72,7 +71,6 @@ function refreshAccessToken(refreshToken: string | undefined): Promise<string> {
  */
 const handleResponseError = async (error: AxiosError): Promise<AxiosResponse> => {
   const originalRequest = error.config as RetriableRequestConfig | undefined
-  const refreshToken = authTokenStore.getRefreshToken()
 
   if (
     error.response?.status !== HttpStatusCode.Unauthorized ||
@@ -86,7 +84,7 @@ const handleResponseError = async (error: AxiosError): Promise<AxiosResponse> =>
   originalRequest._retry = true
 
   try {
-    const accessToken = await refreshAccessToken(refreshToken)
+    const accessToken = await refreshAccessToken()
     authTokenStore.updateAccessToken(accessToken)
     originalRequest.headers.set('Authorization', `Bearer ${accessToken}`)
 

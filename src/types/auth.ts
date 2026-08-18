@@ -18,7 +18,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string
-  refreshToken: string
 }
 
 export interface VerifyEmailRequest {
@@ -37,11 +36,6 @@ export interface ResetPasswordRequest {
 
 export interface RefreshResponse {
   accessToken: string
-}
-
-export interface AuthTokens {
-  accessToken: string
-  refreshToken?: string
 }
 
 export interface AuthenticatedUser {
