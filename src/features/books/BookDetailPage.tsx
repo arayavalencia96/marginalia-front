@@ -3,14 +3,15 @@ import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useS
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router-dom'
 import { z } from 'zod'
 import { createChapter, deleteChapter, getBookChapters, updateChapter } from '../../api/chapters'
-import { ChapterContentPanel } from '../blocks/ChapterContentPanel'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import type { ChapterRequest, ChapterResponse } from '../../types/chapter'
+
+const ChapterContentPanel = lazy(() => import('../blocks/ChapterContentPanel').then(({ ChapterContentPanel }) => ({ default: ChapterContentPanel })))
 
 const chapterTitleSchema = z.object({
   title: z.string().trim().min(1, 'El título es obligatorio.').max(255, 'El título no puede superar los 255 caracteres.'),
@@ -366,7 +367,7 @@ export function BookDetailPage() {
           {chaptersQuery.data && chaptersQuery.data.length > 0 && <DndContext collisionDetection={closestCenter} onDragCancel={() => setDraggedChapterId(undefined)} onDragEnd={handleDragEnd} onDragStart={(event) => setDraggedChapterId(String(event.active.id))} sensors={sensors}><ChapterTree {...treeProps} parentChapterId={null} /></DndContext>}
         </aside>
         {selectedChapterId
-          ? <ChapterContentPanel chapterId={selectedChapterId} />
+          ? <Suspense fallback={<section className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Cargando contenido...</section>}><ChapterContentPanel chapterId={selectedChapterId} /></Suspense>
           : <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">Selecciona un capítulo del índice para ver su contenido.</section>}
       </div>
 
