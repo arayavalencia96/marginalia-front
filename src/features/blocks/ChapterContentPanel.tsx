@@ -3,13 +3,38 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { BlockMath } from 'react-katex'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash'
+import css from 'react-syntax-highlighter/dist/esm/languages/prism/css'
+import go from 'react-syntax-highlighter/dist/esm/languages/prism/go'
+import java from 'react-syntax-highlighter/dist/esm/languages/prism/java'
+import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript'
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json'
+import markup from 'react-syntax-highlighter/dist/esm/languages/prism/markup'
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python'
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql'
+import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript'
+import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { toast } from 'sonner'
 import 'katex/dist/katex.min.css'
 import { z } from 'zod'
 import { createContentBlock, deleteContentBlock, getChapterBlocks, toggleContentBlockResolved, updateContentBlock, uploadBlockAttachment } from '../../api/contentBlocks'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import type { AttachmentResponse, ContentBlockRequest, ContentBlockResponse, StepListBlockRequest } from '../../types/contentBlock'
+
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('css', css)
+SyntaxHighlighter.registerLanguage('go', go)
+SyntaxHighlighter.registerLanguage('html', markup)
+SyntaxHighlighter.registerLanguage('java', java)
+SyntaxHighlighter.registerLanguage('javascript', javascript)
+SyntaxHighlighter.registerLanguage('json', json)
+SyntaxHighlighter.registerLanguage('python', python)
+SyntaxHighlighter.registerLanguage('sql', sql)
+SyntaxHighlighter.registerLanguage('typescript', typescript)
+SyntaxHighlighter.registerLanguage('xml', markup)
+SyntaxHighlighter.registerLanguage('yaml', yaml)
 
 const noteSchema = z.object({ content: z.string().trim().min(1, 'La nota no puede estar vacía.') })
 const stepListSchema = z.object({
@@ -192,10 +217,12 @@ function ImageBlock({
     if (!file) return
     if (!file.type.toLowerCase().startsWith('image/')) {
       setValidationError('Solo se permiten archivos de imagen.')
+      toast.warning('Selecciona un archivo de imagen válido.')
       return
     }
     if (file.size > maxImageSizeBytes) {
       setValidationError('La imagen no puede superar los 5 MB.')
+      toast.warning('La imagen supera el límite de 5 MB.')
       return
     }
     setValidationError(undefined)
@@ -235,17 +262,20 @@ export function ChapterContentPanel({ chapterId }: { chapterId: string }) {
 
   const createBlockMutation = useMutation({
     mutationFn: (request: ContentBlockRequest) => createContentBlock(chapterId, request),
+    meta: { successMessage: 'Contenido agregado correctamente.' },
     onSuccess: () => { createNoteForm.reset(); setCreateBlockType(undefined) },
     onSettled: invalidateBlocks,
   })
   const updateBlockMutation = useMutation({
     mutationFn: ({ blockId, request }: { blockId: string; request: ContentBlockRequest }) => updateContentBlock(blockId, request),
+    meta: { successMessage: 'Contenido actualizado correctamente.' },
     onSuccess: () => setEditingBlockId(undefined),
     onSettled: invalidateBlocks,
   })
-  const deleteBlockMutation = useMutation({ mutationFn: deleteContentBlock, onSuccess: () => setBlockToDelete(undefined), onSettled: invalidateBlocks })
+  const deleteBlockMutation = useMutation({ mutationFn: deleteContentBlock, meta: { successMessage: 'Contenido eliminado correctamente.' }, onSuccess: () => setBlockToDelete(undefined), onSettled: invalidateBlocks })
   const toggleExerciseMutation = useMutation({
     mutationFn: toggleContentBlockResolved,
+    meta: { successMessage: 'Estado del ejercicio actualizado.' },
     onMutate: async (blockId) => {
       await queryClient.cancelQueries({ queryKey: blocksQueryKey })
       const previousBlocks = queryClient.getQueryData<ContentBlockResponse[]>(blocksQueryKey)
@@ -261,6 +291,7 @@ export function ChapterContentPanel({ chapterId }: { chapterId: string }) {
       file,
       (progress) => setUploadProgressByBlockId((current) => ({ ...current, [blockId]: progress })),
     ),
+    meta: { successMessage: 'Imagen subida correctamente.' },
     onMutate: ({ blockId }) => {
       setUploadErrorsByBlockId((current) => ({ ...current, [blockId]: '' }))
       setUploadProgressByBlockId((current) => ({ ...current, [blockId]: 0 }))
@@ -285,7 +316,7 @@ export function ChapterContentPanel({ chapterId }: { chapterId: string }) {
   const orderedBlocks = [...(blocksQuery.data ?? [])].sort((first, second) => first.orderIndex - second.orderIndex)
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="reading-panel rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-lg font-semibold text-slate-900">Contenido</h2><p className="mt-1 text-sm text-slate-600">Agrega y edita bloques para este capítulo.</p></div>
         <div className="flex flex-wrap gap-2"><button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setCreateBlockType('STEP_LIST')} type="button">Agregar lista</button><button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setCreateBlockType('CODE')} type="button">Agregar código</button><button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setCreateBlockType('MATH')} type="button">Agregar fórmula</button><button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setCreateBlockType('EXERCISE')} type="button">Agregar ejercicio</button><button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" disabled={createBlockMutation.isPending} onClick={() => createBlockMutation.mutate(toImageRequest(nextOrderIndex()))} type="button">Agregar imagen</button><button className="rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700" onClick={() => setCreateBlockType('NOTE')} type="button">Agregar nota</button></div>

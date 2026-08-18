@@ -30,6 +30,7 @@ export function VerifyAccountPage() {
 
   const verifyAccountMutation = useMutation({
     mutationFn: verifyAccount,
+    meta: { successMessage: 'Cuenta verificada correctamente.' },
     onSuccess: () => {
       navigate('/login', {
         replace: true,

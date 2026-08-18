@@ -23,6 +23,7 @@ export function ForgotPasswordPage() {
 
   const forgotPasswordMutation = useMutation({
     mutationFn: requestPasswordReset,
+    meta: { successMessage: 'Si la cuenta existe, recibirás instrucciones por correo.' },
   })
 
   const onSubmit = (values: ForgotPasswordFormValues): void => {

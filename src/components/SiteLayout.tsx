@@ -1,10 +1,12 @@
 import { Outlet } from 'react-router-dom'
 import { Footer } from './Footer'
+import { Header } from './Header'
 
 export function SiteLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <div className="flex-1"><Outlet /></div>
+    <div className="app-shell">
+      <Header />
+      <div className="app-content"><Outlet /></div>
       <Footer />
     </div>
   )

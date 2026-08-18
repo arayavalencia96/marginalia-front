@@ -3,14 +3,15 @@ import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useS
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router-dom'
 import { z } from 'zod'
 import { createChapter, deleteChapter, getBookChapters, updateChapter } from '../../api/chapters'
-import { ChapterContentPanel } from '../blocks/ChapterContentPanel'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import type { ChapterRequest, ChapterResponse } from '../../types/chapter'
+
+const ChapterContentPanel = lazy(() => import('../blocks/ChapterContentPanel').then(({ ChapterContentPanel }) => ({ default: ChapterContentPanel })))
 
 const chapterTitleSchema = z.object({
   title: z.string().trim().min(1, 'El título es obligatorio.').max(255, 'El título no puede superar los 255 caracteres.'),
@@ -209,6 +210,7 @@ export function BookDetailPage() {
       const orderIndex = siblings.reduce((highest, chapter) => Math.max(highest, chapter.orderIndex), -1) + 1
       return createChapter(bookId ?? '', { title, parentChapterId, orderIndex })
     },
+    meta: { successMessage: 'Sección creada correctamente.' },
     onSuccess: (chapter) => {
       if (chapter.parentChapterId) setExpandedChapterIds((current) => new Set([...current, chapter.parentChapterId as string]))
       closeCreateChapter()
@@ -217,11 +219,13 @@ export function BookDetailPage() {
   })
   const updateChapterMutation = useMutation({
     mutationFn: ({ chapter, title }: { chapter: ChapterResponse; title: string }) => updateChapter(chapter.id, { title, parentChapterId: chapter.parentChapterId, orderIndex: chapter.orderIndex } satisfies ChapterRequest),
+    meta: { successMessage: 'Sección actualizada correctamente.' },
     onSuccess: () => setEditingChapterId(undefined),
     onSettled: invalidateChapters,
   })
   const deleteChapterMutation = useMutation({
     mutationFn: deleteChapter,
+    meta: { successMessage: 'Sección eliminada correctamente.' },
     onSuccess: (_response, chapterId) => {
       if (selectedChapterId === chapterId) setSelectedChapterId(undefined)
       setChapterToDelete(undefined)
@@ -235,6 +239,7 @@ export function BookDetailPage() {
       parentChapterId: chapter.parentChapterId,
       orderIndex: chapter.orderIndex,
     }))),
+    meta: { successMessage: 'Orden de las secciones actualizado.' },
     onMutate: async ({ nextChapters }) => {
       await queryClient.cancelQueries({ queryKey: chaptersQueryKey })
       const previousChapters = queryClient.getQueryData<ChapterResponse[]>(chaptersQueryKey)
@@ -346,14 +351,14 @@ export function BookDetailPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
+    <main className="book-detail-page mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
       <Link className="text-sm font-medium text-slate-700 underline hover:text-slate-950" to="/books">← Volver a mis libros</Link>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
         <div><h1 className="text-3xl font-semibold tracking-tight text-slate-900">Capítulos</h1><p className="mt-2 text-sm text-slate-600">Arrastra desde ⠿ para reordenar o soltar dentro de un capítulo.</p></div>
         <button className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700" onClick={() => openCreateChapter(null)} type="button">Agregar capítulo</button>
       </div>
       <div className="mt-8 grid min-h-96 gap-6 lg:grid-cols-[20rem_1fr]">
-        <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Árbol de capítulos">
+        <aside className="chapter-sidebar rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Árbol de capítulos">
           <h2 className="px-2 pb-3 text-sm font-semibold text-slate-900">Índice</h2>
           {chaptersQuery.isPending && <p className="px-2 text-sm text-slate-600">Cargando capítulos...</p>}
           {chaptersQuery.isError && <div className="px-2 text-sm text-red-700" role="alert"><p>{getApiErrorMessage(chaptersQuery.error)}</p><button className="mt-3 font-semibold underline" onClick={() => chaptersQuery.refetch()} type="button">Reintentar</button></div>}
@@ -362,7 +367,7 @@ export function BookDetailPage() {
           {chaptersQuery.data && chaptersQuery.data.length > 0 && <DndContext collisionDetection={closestCenter} onDragCancel={() => setDraggedChapterId(undefined)} onDragEnd={handleDragEnd} onDragStart={(event) => setDraggedChapterId(String(event.active.id))} sensors={sensors}><ChapterTree {...treeProps} parentChapterId={null} /></DndContext>}
         </aside>
         {selectedChapterId
-          ? <ChapterContentPanel chapterId={selectedChapterId} />
+          ? <Suspense fallback={<section className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Cargando contenido...</section>}><ChapterContentPanel chapterId={selectedChapterId} /></Suspense>
           : <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">Selecciona un capítulo del índice para ver su contenido.</section>}
       </div>
 
