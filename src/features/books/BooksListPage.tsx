@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { z } from 'zod'
-import { createBook, getBooks } from '../../api/books'
+import { createBook, deleteBook, exportBookPdf, getBooks, updateBook } from '../../api/books'
 import { useAuth } from '../../hooks/useAuth'
+import { downloadBlob } from '../../lib/downloadBlob'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import { bookTopics, type BookRequest, type BookResponse, type BookTopic } from '../../types/book'
 
@@ -13,6 +14,16 @@ const booksQueryKey = ['books'] as const
 
 const topicLabels: Record<BookTopic, string> = {
   PROGRAMMING: 'Programación',
+  FINANCE_INVESTING: 'Finanzas e inversiones',
+  PSYCHOLOGY: 'Psicología',
+  PERSONAL_GROWTH: 'Crecimiento personal',
+  BUSINESS_ENTREPRENEURSHIP: 'Negocios y emprendimiento',
+  LANGUAGES: 'Idiomas',
+  PHILOSOPHY: 'Filosofía',
+  HEALTH_SPORTS: 'Salud y deporte',
+  FICTION: 'Ficción',
+  BIOGRAPHY: 'Biografía',
+  LAW: 'Derecho',
   MATH: 'Matemática',
   SCIENCE: 'Ciencia',
   HISTORY: 'Historia',
@@ -36,6 +47,9 @@ export function BooksListPage() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [bookToEdit, setBookToEdit] = useState<BookResponse>()
+  const [bookToDelete, setBookToDelete] = useState<BookResponse>()
+  const [exportingBookId, setExportingBookId] = useState<string>()
   const {
     register,
     handleSubmit,
@@ -45,6 +59,7 @@ export function BooksListPage() {
     resolver: zodResolver(bookSchema),
     defaultValues: { topic: 'OTHER' },
   })
+  const editForm = useForm<BookFormValues>({ resolver: zodResolver(bookSchema) })
 
   const booksQuery = useQuery({
     queryKey: booksQueryKey,
@@ -53,6 +68,7 @@ export function BooksListPage() {
 
   const createBookMutation = useMutation<BookResponse, Error, BookRequest, CreateBookContext>({
     mutationFn: createBook,
+    meta: { successMessage: 'Libro creado correctamente.' },
     onMutate: async (request) => {
       await queryClient.cancelQueries({ queryKey: booksQueryKey })
       const previousBooks = queryClient.getQueryData<BookResponse[]>(booksQueryKey)
@@ -79,6 +95,40 @@ export function BooksListPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: booksQueryKey }),
   })
 
+  const updateBookMutation = useMutation({
+    mutationFn: ({ bookId, request }: { bookId: string; request: BookRequest }) => updateBook(bookId, request),
+    meta: { successMessage: 'Libro actualizado correctamente.' },
+    onSuccess: (updatedBook) => {
+      queryClient.setQueryData<BookResponse[]>(booksQueryKey, (books = []) =>
+        books.map((book) => book.id === updatedBook.id ? updatedBook : book),
+      )
+      setBookToEdit(undefined)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: booksQueryKey }),
+  })
+
+  const deleteBookMutation = useMutation({
+    mutationFn: deleteBook,
+    meta: { successMessage: 'Libro eliminado definitivamente.' },
+    onSuccess: (_response, bookId) => {
+      queryClient.setQueryData<BookResponse[]>(booksQueryKey, (books = []) =>
+        books.filter((book) => book.id !== bookId),
+      )
+      setBookToDelete(undefined)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: booksQueryKey }),
+  })
+
+  const exportBookMutation = useMutation({
+    mutationFn: exportBookPdf,
+    meta: {
+      pendingMessage: 'Estamos preparando el PDF del libro.',
+      successMessage: 'PDF generado. La descarga comenzó automáticamente.',
+    },
+    onSuccess: ({ blob, fileName }) => downloadBlob(blob, fileName),
+    onSettled: () => setExportingBookId(undefined),
+  })
+
   function closeCreateModal(): void {
     setIsCreateModalOpen(false)
     reset({ title: '', author: '', topic: 'OTHER' })
@@ -88,9 +138,21 @@ export function BooksListPage() {
     createBookMutation.mutate(values)
   }
 
+  function openEditModal(book: BookResponse): void {
+    editForm.reset({ title: book.title, author: book.author, topic: book.topic })
+    updateBookMutation.reset()
+    setBookToEdit(book)
+  }
+
+  function startExport(book: BookResponse): void {
+    exportBookMutation.reset()
+    setExportingBookId(book.id)
+    exportBookMutation.mutate(book)
+  }
+
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="page-container mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
+      <div className="page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Mis libros</h1>
           <p className="mt-2 text-sm text-slate-600">Organiza tus anotaciones por libro y tema.</p>
@@ -115,6 +177,12 @@ export function BooksListPage() {
         </div>
       )}
 
+      {exportBookMutation.isError && (
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+          {getApiErrorMessage(exportBookMutation.error)}
+        </p>
+      )}
+
       {booksQuery.data && booksQuery.data.length === 0 && (
         <section className="mt-10 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <h2 className="text-lg font-semibold text-slate-900">Todavía no tienes libros</h2>
@@ -123,17 +191,25 @@ export function BooksListPage() {
       )}
 
       {booksQuery.data && booksQuery.data.length > 0 && (
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Lista de libros">
+        <section className="book-grid mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Lista de libros">
           {booksQuery.data.map((book) => (
-            <Link
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400"
+            <article
+              className="book-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400"
               key={book.id}
-              to={`/books/${book.id}`}
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{topicLabels[book.topic]}</p>
-              <h2 className="mt-3 text-lg font-semibold text-slate-900">{book.title}</h2>
-              <p className="mt-1 text-sm text-slate-600">{book.author}</p>
-            </Link>
+              <Link className="book-card-main" to={`/books/${book.id}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{topicLabels[book.topic]}</p>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">{book.title}</h2>
+                <p className="mt-1 text-sm text-slate-600">{book.author}</p>
+              </Link>
+              <div className="book-card-actions">
+                <button onClick={() => openEditModal(book)} type="button">Editar</button>
+                <button disabled={exportBookMutation.isPending} onClick={() => startExport(book)} type="button">
+                  {exportingBookId === book.id ? 'Generando PDF...' : 'Exportar PDF'}
+                </button>
+                <button className="danger" onClick={() => { deleteBookMutation.reset(); setBookToDelete(book) }} type="button">Eliminar</button>
+              </div>
+            </article>
           ))}
         </section>
       )}
@@ -234,6 +310,58 @@ export function BooksListPage() {
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {bookToEdit && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="presentation">
+          <section aria-labelledby="edit-book-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900" id="edit-book-title">Editar libro</h2>
+                <p className="mt-1 text-sm text-slate-600">Actualiza el título, autor o tema.</p>
+              </div>
+              <button aria-label="Cerrar" className="text-2xl leading-none text-slate-500 hover:text-slate-900" disabled={updateBookMutation.isPending} onClick={() => setBookToEdit(undefined)} type="button">×</button>
+            </div>
+
+            <form className="mt-6 space-y-4" noValidate onSubmit={editForm.handleSubmit((request) => updateBookMutation.mutate({ bookId: bookToEdit.id, request }))}>
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="edit-book-title-input">Título</label>
+                <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="edit-book-title-input" aria-invalid={Boolean(editForm.formState.errors.title)} {...editForm.register('title')} />
+                {editForm.formState.errors.title && <p className="mt-1 text-sm text-red-600">{editForm.formState.errors.title.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="edit-book-author">Autor</label>
+                <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="edit-book-author" aria-invalid={Boolean(editForm.formState.errors.author)} {...editForm.register('author')} />
+                {editForm.formState.errors.author && <p className="mt-1 text-sm text-red-600">{editForm.formState.errors.author.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700" htmlFor="edit-book-topic">Tema</label>
+                <select className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="edit-book-topic" aria-invalid={Boolean(editForm.formState.errors.topic)} {...editForm.register('topic')}>
+                  {bookTopics.map((topic) => <option key={topic} value={topic}>{topicLabels[topic]}</option>)}
+                </select>
+              </div>
+              {updateBookMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(updateBookMutation.error)}</p>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button className="rounded-md px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" disabled={updateBookMutation.isPending} onClick={() => setBookToEdit(undefined)} type="button">Cancelar</button>
+                <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-400" disabled={updateBookMutation.isPending} type="submit">{updateBookMutation.isPending ? 'Guardando...' : 'Guardar cambios'}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {bookToDelete && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="presentation">
+          <section aria-labelledby="delete-book-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog">
+            <h2 className="text-xl font-semibold text-slate-900" id="delete-book-title">Eliminar libro</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">¿Seguro que quieres eliminar “{bookToDelete.title}”? También se eliminarán sus capítulos, bloques e imágenes. Esta acción no se puede deshacer.</p>
+            {deleteBookMutation.isError && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(deleteBookMutation.error)}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button className="rounded-md px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" disabled={deleteBookMutation.isPending} onClick={() => setBookToDelete(undefined)} type="button">Cancelar</button>
+              <button className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:bg-red-400" disabled={deleteBookMutation.isPending} onClick={() => deleteBookMutation.mutate(bookToDelete.id)} type="button">{deleteBookMutation.isPending ? 'Eliminando...' : 'Eliminar definitivamente'}</button>
+            </div>
           </section>
         </div>
       )}

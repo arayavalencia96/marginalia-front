@@ -32,6 +32,7 @@ export function RegisterPage() {
 
   const registerMutation = useMutation({
     mutationFn: registerAccount,
+    meta: { successMessage: 'Cuenta creada. Revisa tu correo para verificarla.' },
     onSuccess: ({ email }) => {
       navigate('/verify', { state: { email } })
     },

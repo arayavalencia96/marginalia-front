@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AppToaster } from './components/AppToaster'
 import { SiteLayout } from './components/SiteLayout'
 import { AuthProvider } from './features/auth/AuthContext'
 import { AccountSettingsPage } from './features/auth/AccountSettingsPage'
@@ -15,22 +16,17 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage'
 import { VerifyAccountPage } from './features/auth/VerifyAccountPage'
 import { queryClient } from './lib/queryClient'
 import { LegalPage } from './pages/LegalPage'
+import { HomePage } from './pages/HomePage'
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <AppToaster />
           <Routes>
             <Route element={<SiteLayout />}>
-              <Route
-                path="/"
-                element={
-                  <main className="grid min-h-screen place-items-center">
-                    <h1 className="text-4xl font-semibold">Marginalia</h1>
-                  </main>
-                }
-              />
+              <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/goodbye" element={<GoodbyePage />} />

@@ -12,6 +12,9 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
+/**
+ * Axios client for authenticated API requests, including automatic access-token renewal.
+ */
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
@@ -24,6 +27,12 @@ const refreshClient = axios.create({
 
 let refreshPromise: Promise<string> | undefined
 
+/**
+ * Adds the in-memory access token to an outgoing request when one is available.
+ *
+ * @param config - The Axios request configuration to enrich.
+ * @returns The request configuration with its Authorization header set when applicable.
+ */
 const attachAccessToken = (
   config: InternalAxiosRequestConfig,
 ): InternalAxiosRequestConfig => {
@@ -36,6 +45,12 @@ const attachAccessToken = (
   return config
 }
 
+/**
+ * Obtains a fresh access token, sharing an in-flight refresh request across callers.
+ *
+ * @param refreshToken - The optional refresh token held in the in-memory session.
+ * @returns A promise resolving to the new access token.
+ */
 function refreshAccessToken(refreshToken: string | undefined): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = refreshClient
@@ -49,6 +64,12 @@ function refreshAccessToken(refreshToken: string | undefined): Promise<string> {
   return refreshPromise
 }
 
+/**
+ * Retries one unauthorized API request after refreshing the access token.
+ *
+ * @param error - The Axios error produced by the original request.
+ * @returns The retried response when refresh succeeds.
+ */
 const handleResponseError = async (error: AxiosError): Promise<AxiosResponse> => {
   const originalRequest = error.config as RetriableRequestConfig | undefined
   const refreshToken = authTokenStore.getRefreshToken()

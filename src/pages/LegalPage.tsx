@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 interface LegalPageProps {
   title: string
   description: string
@@ -12,6 +14,7 @@ const placeholderParagraphs = [
 export function LegalPage({ title, description }: LegalPageProps) {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
+      <Link className="back-link" to="/">← Volver al inicio</Link>
       <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
         <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">Marginalia</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{title}</h1>

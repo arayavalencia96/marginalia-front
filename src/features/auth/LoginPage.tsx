@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { login } from '../../api/auth'
 import { useAuth } from '../../hooks/useAuth'
@@ -20,6 +20,7 @@ interface LoginLocationState {
 
 export function LoginPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const successMessage = (location.state as LoginLocationState | null)?.successMessage
   const { signIn } = useAuth()
   const {
@@ -32,8 +33,10 @@ export function LoginPage() {
 
   const loginMutation = useMutation({
     mutationFn: login,
+    meta: { successMessage: 'Sesión iniciada correctamente.' },
     onSuccess: (tokens) => {
       signIn(tokens)
+      navigate('/books', { replace: true })
     },
   })
 

@@ -35,6 +35,7 @@ export function ResetPasswordPage() {
 
   const resetPasswordMutation = useMutation({
     mutationFn: resetPassword,
+    meta: { successMessage: 'Contraseña restablecida correctamente.' },
     onSuccess: () => {
       navigate('/login', {
         replace: true,
