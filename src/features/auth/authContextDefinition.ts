@@ -5,8 +5,9 @@ export interface AuthContextValue {
   user: AuthenticatedUser | undefined
   isAuthenticated: boolean
   isInitializing: boolean
-  signIn: (accessToken: string) => void
+  signIn: (accessToken: string) => Promise<void>
   signOut: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 export const authContext = createContext<AuthContextValue | undefined>(undefined)

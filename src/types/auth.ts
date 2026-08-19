@@ -41,4 +41,6 @@ export interface RefreshResponse {
 export interface AuthenticatedUser {
   id: string
   email: string
+  username: string
+  passwordConfigured: boolean
 }

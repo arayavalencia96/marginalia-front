@@ -35,7 +35,7 @@ export function Header() {
             <span className="user-email" role="status">Verificando sesión...</span>
           ) : isAuthenticated ? (
             <>
-              <span className="user-email" title={user?.email}>{user?.email}</span>
+              <span className="user-email" title={user?.email}>{user?.username}</span>
               <button className="button button-ghost button-small" onClick={() => void handleSignOut()} type="button">Cerrar sesión</button>
             </>
           ) : (

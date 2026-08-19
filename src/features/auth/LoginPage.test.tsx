@@ -45,6 +45,12 @@ describe('LoginPage', () => {
         receivedBody = await request.json()
         return HttpResponse.json({ accessToken })
       }),
+      http.get('*/api/users/me', () => HttpResponse.json({
+        id: 'user-1',
+        email: 'reader@example.com',
+        username: 'reader',
+        passwordConfigured: true,
+      })),
     )
     const user = userEvent.setup()
     renderLoginPage()

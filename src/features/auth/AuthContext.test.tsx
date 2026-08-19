@@ -8,11 +8,17 @@ import { authTokenStore } from '../../lib/authTokenStore'
 import { server } from '../../test/server'
 import { AuthProvider } from './AuthContext'
 
-const accessToken = `header.${btoa(JSON.stringify({ sub: 'user-1', email: 'reader@example.com' }))}.signature`
+const accessToken = 'access-token'
+const currentUser = {
+  id: 'user-1',
+  email: 'reader@example.com',
+  username: 'reader',
+  passwordConfigured: true,
+}
 
 function SessionUser() {
   const { user } = useAuth()
-  return <p>{user?.email}</p>
+  return <p>{user?.username}</p>
 }
 
 function renderProtectedSession() {
@@ -35,11 +41,12 @@ describe('AuthProvider session restoration', () => {
 
   it('restores an authenticated session from the refresh cookie', async () => {
     server.use(http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken })))
+    server.use(http.get('*/api/users/me', () => HttpResponse.json(currentUser)))
 
     renderProtectedSession()
 
     expect(screen.getByRole('status')).toHaveTextContent('Restaurando sesión...')
-    expect(await screen.findByText('reader@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('reader')).toBeInTheDocument()
     expect(authTokenStore.getAccessToken()).toBe(accessToken)
   })
 
