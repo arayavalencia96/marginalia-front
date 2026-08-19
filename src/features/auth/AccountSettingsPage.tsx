@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -24,7 +24,7 @@ const changeUsernameSchema = z.object({
   username: z.string().trim().min(3, 'El nombre de usuario debe tener al menos 3 caracteres.').max(50, 'El nombre de usuario no puede superar los 50 caracteres.'),
 })
 const deleteAccountSchema = z.object({
-  password: z.string().min(1, 'Confirma tu contraseña actual.'),
+  password: z.string().optional(),
 })
 
 type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>
@@ -37,18 +37,22 @@ const submitClassName = 'w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font
 
 export function AccountSettingsPage() {
   const navigate = useNavigate()
-  const { signOut } = useAuth()
+  const { refreshUser, signOut, user } = useAuth()
   const passwordForm = useForm<ChangePasswordFormValues>({ resolver: zodResolver(changePasswordSchema) })
   const emailForm = useForm<ChangeEmailFormValues>({ resolver: zodResolver(changeEmailSchema) })
   const usernameForm = useForm<ChangeUsernameFormValues>({ resolver: zodResolver(changeUsernameSchema) })
   const deleteAccountForm = useForm<DeleteAccountFormValues>({ resolver: zodResolver(deleteAccountSchema) })
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false)
 
+  useEffect(() => {
+    if (user) usernameForm.reset({ username: user.username })
+  }, [user, usernameForm])
+
   const changePasswordMutation = useMutation({
     mutationFn: changePassword,
     meta: { successMessage: 'Contraseña actualizada correctamente.' },
-    onSuccess: () => {
-      signOut()
+    onSuccess: async () => {
+      await signOut()
       navigate('/login', { replace: true, state: { successMessage: 'Contraseña actualizada. Inicia sesión nuevamente.' } })
     },
   })
@@ -58,20 +62,35 @@ export function AccountSettingsPage() {
       pendingMessage: 'El nuevo correo requerirá una verificación.',
       successMessage: 'Correo actualizado. Completa la nueva verificación.',
     },
-    onSuccess: (_response, request) => {
-      signOut()
+    onSuccess: async (_response, request) => {
+      await signOut()
       navigate('/verify', { replace: true, state: { email: request.newEmail } })
     },
   })
-  const changeUsernameMutation = useMutation({ mutationFn: changeUsername, meta: { successMessage: 'Nombre de usuario actualizado.' } })
+  const changeUsernameMutation = useMutation({
+    mutationFn: changeUsername,
+    meta: { successMessage: 'Nombre de usuario actualizado.' },
+    onSuccess: async (_response, request) => {
+      await refreshUser()
+      usernameForm.reset({ username: request.username.trim() })
+    },
+  })
   const deleteAccountMutation = useMutation({
     mutationFn: deleteAccount,
     meta: { successMessage: 'Tu cuenta fue dada de baja.' },
-    onSuccess: () => {
-      signOut()
+    onSuccess: async () => {
+      await signOut()
       navigate('/goodbye', { replace: true })
     },
   })
+
+  const openDeleteConfirmation = (values: DeleteAccountFormValues): void => {
+    if (user?.passwordConfigured && !values.password?.trim()) {
+      deleteAccountForm.setError('password', { message: 'Confirma tu contraseña actual.' })
+      return
+    }
+    setIsDeleteConfirmationOpen(true)
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -88,32 +107,45 @@ export function AccountSettingsPage() {
           </form>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-lg font-semibold text-slate-900">Correo electrónico</h2><p className="mt-1 text-sm text-slate-600">Por seguridad, tendrás que verificar el nuevo correo antes de volver a iniciar sesión.</p>
-          <form className="mt-6 space-y-5" noValidate onSubmit={emailForm.handleSubmit((values) => changeEmailMutation.mutate(values))}>
-            <div><label className="block text-sm font-medium text-slate-700" htmlFor="new-email">Nuevo correo electrónico</label><input autoComplete="email" className={inputClassName} id="new-email" type="email" aria-invalid={Boolean(emailForm.formState.errors.newEmail)} {...emailForm.register('newEmail')} />{emailForm.formState.errors.newEmail && <p className="mt-1 text-sm text-red-600">{emailForm.formState.errors.newEmail.message}</p>}</div>
-            <div><label className="block text-sm font-medium text-slate-700" htmlFor="email-password">Contraseña actual</label><input autoComplete="current-password" className={inputClassName} id="email-password" type="password" aria-invalid={Boolean(emailForm.formState.errors.password)} {...emailForm.register('password')} />{emailForm.formState.errors.password && <p className="mt-1 text-sm text-red-600">{emailForm.formState.errors.password.message}</p>}</div>
-            {changeEmailMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(changeEmailMutation.error)}</p>}
-            <button className={submitClassName} disabled={changeEmailMutation.isPending} type="submit">{changeEmailMutation.isPending ? 'Actualizando correo...' : 'Actualizar correo y verificar'}</button>
-          </form>
-        </section>
+        {user?.passwordConfigured ? (
+          <>
+            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-lg font-semibold text-slate-900">Correo electrónico</h2><p className="mt-1 text-sm text-slate-600">Por seguridad, tendrás que verificar el nuevo correo antes de volver a iniciar sesión.</p>
+              <form className="mt-6 space-y-5" noValidate onSubmit={emailForm.handleSubmit((values) => changeEmailMutation.mutate(values))}>
+                <div><label className="block text-sm font-medium text-slate-700" htmlFor="new-email">Nuevo correo electrónico</label><input autoComplete="email" className={inputClassName} id="new-email" type="email" aria-invalid={Boolean(emailForm.formState.errors.newEmail)} {...emailForm.register('newEmail')} />{emailForm.formState.errors.newEmail && <p className="mt-1 text-sm text-red-600">{emailForm.formState.errors.newEmail.message}</p>}</div>
+                <div><label className="block text-sm font-medium text-slate-700" htmlFor="email-password">Contraseña actual</label><input autoComplete="current-password" className={inputClassName} id="email-password" type="password" aria-invalid={Boolean(emailForm.formState.errors.password)} {...emailForm.register('password')} />{emailForm.formState.errors.password && <p className="mt-1 text-sm text-red-600">{emailForm.formState.errors.password.message}</p>}</div>
+                {changeEmailMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(changeEmailMutation.error)}</p>}
+                <button className={submitClassName} disabled={changeEmailMutation.isPending} type="submit">{changeEmailMutation.isPending ? 'Actualizando correo...' : 'Actualizar correo y verificar'}</button>
+              </form>
+            </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-lg font-semibold text-slate-900">Contraseña</h2><p className="mt-1 text-sm text-slate-600">Al actualizarla se cerrará tu sesión en todos los dispositivos.</p>
-          <form className="mt-6 space-y-5" noValidate onSubmit={passwordForm.handleSubmit(({ currentPassword, newPassword }) => changePasswordMutation.mutate({ currentPassword, newPassword }))}>
-            <div><label className="block text-sm font-medium text-slate-700" htmlFor="current-password">Contraseña actual</label><input autoComplete="current-password" className={inputClassName} id="current-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.currentPassword)} {...passwordForm.register('currentPassword')} />{passwordForm.formState.errors.currentPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.currentPassword.message}</p>}</div>
-            <div><label className="block text-sm font-medium text-slate-700" htmlFor="new-password">Nueva contraseña</label><input autoComplete="new-password" className={inputClassName} id="new-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.newPassword)} {...passwordForm.register('newPassword')} />{passwordForm.formState.errors.newPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.newPassword.message}</p>}</div>
-            <div><label className="block text-sm font-medium text-slate-700" htmlFor="confirm-new-password">Confirmar nueva contraseña</label><input autoComplete="new-password" className={inputClassName} id="confirm-new-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.confirmNewPassword)} {...passwordForm.register('confirmNewPassword')} />{passwordForm.formState.errors.confirmNewPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.confirmNewPassword.message}</p>}</div>
-            {changePasswordMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(changePasswordMutation.error)}</p>}
-            <button className={submitClassName} disabled={changePasswordMutation.isPending} type="submit">{changePasswordMutation.isPending ? 'Actualizando contraseña...' : 'Actualizar contraseña'}</button>
-          </form>
-        </section>
+            <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-lg font-semibold text-slate-900">Contraseña</h2><p className="mt-1 text-sm text-slate-600">Al actualizarla se cerrará tu sesión en todos los dispositivos.</p>
+              <form className="mt-6 space-y-5" noValidate onSubmit={passwordForm.handleSubmit(({ currentPassword, newPassword }) => changePasswordMutation.mutate({ currentPassword, newPassword }))}>
+                <div><label className="block text-sm font-medium text-slate-700" htmlFor="current-password">Contraseña actual</label><input autoComplete="current-password" className={inputClassName} id="current-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.currentPassword)} {...passwordForm.register('currentPassword')} />{passwordForm.formState.errors.currentPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.currentPassword.message}</p>}</div>
+                <div><label className="block text-sm font-medium text-slate-700" htmlFor="new-password">Nueva contraseña</label><input autoComplete="new-password" className={inputClassName} id="new-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.newPassword)} {...passwordForm.register('newPassword')} />{passwordForm.formState.errors.newPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.newPassword.message}</p>}</div>
+                <div><label className="block text-sm font-medium text-slate-700" htmlFor="confirm-new-password">Confirmar nueva contraseña</label><input autoComplete="new-password" className={inputClassName} id="confirm-new-password" type="password" aria-invalid={Boolean(passwordForm.formState.errors.confirmNewPassword)} {...passwordForm.register('confirmNewPassword')} />{passwordForm.formState.errors.confirmNewPassword && <p className="mt-1 text-sm text-red-600">{passwordForm.formState.errors.confirmNewPassword.message}</p>}</div>
+                {changePasswordMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(changePasswordMutation.error)}</p>}
+                <button className={submitClassName} disabled={changePasswordMutation.isPending} type="submit">{changePasswordMutation.isPending ? 'Actualizando contraseña...' : 'Actualizar contraseña'}</button>
+              </form>
+            </section>
+          </>
+        ) : (
+          <section className="rounded-xl border border-blue-200 bg-blue-50 p-6 shadow-sm sm:p-8">
+            <h2 className="text-lg font-semibold text-blue-950">Acceso con Google</h2>
+            <p className="mt-2 text-sm text-blue-800">Tu cuenta no tiene una contraseña local. Google nunca comparte su contraseña con Marginalia, por lo que no debes ingresarla en los formularios de la aplicación.</p>
+          </section>
+        )}
 
         <section className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-sm sm:p-8">
           <h2 className="text-lg font-semibold text-red-950">Eliminar cuenta</h2>
           <p className="mt-1 text-sm text-red-800">Esta acción desactivará tu cuenta y programará la eliminación definitiva de tus datos.</p>
-          <form className="mt-6 space-y-5" noValidate onSubmit={deleteAccountForm.handleSubmit(() => setIsDeleteConfirmationOpen(true))}>
-            <div><label className="block text-sm font-medium text-red-950" htmlFor="delete-account-password">Confirma tu contraseña</label><input autoComplete="current-password" className={inputClassName} id="delete-account-password" type="password" aria-invalid={Boolean(deleteAccountForm.formState.errors.password)} {...deleteAccountForm.register('password')} />{deleteAccountForm.formState.errors.password && <p className="mt-1 text-sm text-red-700">{deleteAccountForm.formState.errors.password.message}</p>}</div>
+          <form className="mt-6 space-y-5" noValidate onSubmit={deleteAccountForm.handleSubmit(openDeleteConfirmation)}>
+            {user?.passwordConfigured ? (
+              <div><label className="block text-sm font-medium text-red-950" htmlFor="delete-account-password">Confirma tu contraseña</label><input autoComplete="current-password" className={inputClassName} id="delete-account-password" type="password" aria-invalid={Boolean(deleteAccountForm.formState.errors.password)} {...deleteAccountForm.register('password')} />{deleteAccountForm.formState.errors.password && <p className="mt-1 text-sm text-red-700">{deleteAccountForm.formState.errors.password.message}</p>}</div>
+            ) : (
+              <p className="rounded-md bg-white/70 px-3 py-2 text-sm text-red-900">Como ingresaste con Google, confirmaremos la eliminación usando tu sesión activa y el siguiente diálogo.</p>
+            )}
             <button className="w-full rounded-md bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-red-400" type="submit">Eliminar mi cuenta</button>
           </form>
         </section>

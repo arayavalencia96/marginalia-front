@@ -1,12 +1,13 @@
 import { createContext } from 'react'
-import type { AuthenticatedUser, AuthTokens } from '../../types/auth'
+import type { AuthenticatedUser } from '../../types/auth'
 
 export interface AuthContextValue {
   user: AuthenticatedUser | undefined
   isAuthenticated: boolean
-  signIn: (tokens: AuthTokens) => void
-  signInWithAccessToken: (accessToken: string) => void
-  signOut: () => void
+  isInitializing: boolean
+  signIn: (accessToken: string) => Promise<void>
+  signOut: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 export const authContext = createContext<AuthContextValue | undefined>(undefined)

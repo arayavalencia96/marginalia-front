@@ -1,10 +1,8 @@
-import type { AuthTokens } from '../types/auth'
-
-let tokens: AuthTokens | undefined
+let accessToken: string | undefined
 
 /**
- * In-memory storage for the current session tokens. Values are intentionally not persisted
- * across browser reloads.
+ * In-memory storage for the current access token. Session continuity across reloads is
+ * restored with the server-managed HttpOnly refresh cookie.
  */
 export const authTokenStore = {
   /**
@@ -12,37 +10,31 @@ export const authTokenStore = {
    *
    * @returns The access token, when a session is active.
    */
-  getAccessToken: (): string | undefined => tokens?.accessToken,
+  getAccessToken: (): string | undefined => accessToken,
   /**
-   * Reads the current refresh token.
+   * Replaces the current access token.
    *
-   * @returns The refresh token, when one is available.
-   */
-  getRefreshToken: (): string | undefined => tokens?.refreshToken,
-  /**
-   * Replaces the stored session tokens.
-   *
-   * @param nextTokens - The tokens received after authentication or refresh.
+   * @param nextAccessToken - The access token received after authentication or refresh.
    * @returns Nothing.
    */
-  set: (nextTokens: AuthTokens): void => {
-    tokens = nextTokens
+  set: (nextAccessToken: string): void => {
+    accessToken = nextAccessToken
   },
   /**
-   * Replaces only the access token while retaining the current refresh token.
+   * Replaces the current access token.
    *
    * @param accessToken - The renewed access token.
    * @returns Nothing.
    */
-  updateAccessToken: (accessToken: string): void => {
-    tokens = { ...tokens, accessToken }
+  updateAccessToken: (nextAccessToken: string): void => {
+    authTokenStore.set(nextAccessToken)
   },
   /**
-   * Removes all in-memory authentication tokens.
+   * Removes the in-memory access token.
    *
    * @returns Nothing.
    */
   clear: (): void => {
-    tokens = undefined
+    accessToken = undefined
   },
 }

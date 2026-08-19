@@ -1,5 +1,16 @@
 import { apiClient } from '../lib/apiClient'
+import type { AuthenticatedUser } from '../types/auth'
 import type { ChangeEmailRequest, ChangePasswordRequest, ChangeUsernameRequest, DeleteAccountRequest } from '../types/user'
+
+/**
+ * Fetches the authenticated user's current profile.
+ *
+ * @returns The current profile and its available credential capabilities.
+ */
+export async function getCurrentUser(): Promise<AuthenticatedUser> {
+  const { data } = await apiClient.get<AuthenticatedUser>('/api/users/me')
+  return data
+}
 
 /**
  * Changes the authenticated user's password.
@@ -34,7 +45,7 @@ export async function changeUsername(request: ChangeUsernameRequest): Promise<vo
 /**
  * Requests soft deletion of the authenticated user's account.
  *
- * @param request - The password confirmation required by the API.
+ * @param request - Password confirmation when the account has a local password.
  * @returns A promise that resolves when the account is scheduled for deletion.
  */
 export async function deleteAccount(request: DeleteAccountRequest): Promise<void> {

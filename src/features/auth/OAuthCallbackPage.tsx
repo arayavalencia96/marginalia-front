@@ -1,40 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { refreshSession } from '../../api/auth'
-import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import { useAuth } from '../../hooks/useAuth'
 
 export function OAuthCallbackPage() {
   const navigate = useNavigate()
-  const { signInWithAccessToken } = useAuth()
+  const { isAuthenticated, isInitializing } = useAuth()
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
 
   useEffect(() => {
-    let isCurrent = true
-
-    const finalizeSession = async (): Promise<void> => {
-      try {
-        const { accessToken } = await refreshSession()
-
-        if (!isCurrent) {
-          return
-        }
-
-        signInWithAccessToken(accessToken)
-        navigate('/books', { replace: true })
-      } catch (error) {
-        if (isCurrent) {
-          setErrorMessage(getApiErrorMessage(error))
-        }
-      }
+    if (isInitializing) {
+      return
     }
 
-    void finalizeSession()
-
-    return () => {
-      isCurrent = false
+    if (isAuthenticated) {
+      navigate('/books', { replace: true })
+    } else {
+      setErrorMessage('No pudimos recuperar la sesión de Google. Intenta iniciar sesión nuevamente.')
     }
-  }, [navigate, signInWithAccessToken])
+  }, [isAuthenticated, isInitializing, navigate])
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-4 py-10">

@@ -23,7 +23,10 @@ function renderLoginPage() {
 }
 
 describe('LoginPage', () => {
-  beforeEach(() => authTokenStore.clear())
+  beforeEach(() => {
+    authTokenStore.clear()
+    server.use(http.post('*/api/auth/refresh', () => new HttpResponse(null, { status: 401 })))
+  })
 
   it('shows validation errors before submitting invalid credentials', async () => {
     const user = userEvent.setup()
@@ -35,13 +38,19 @@ describe('LoginPage', () => {
     expect(screen.getByText('La contraseña debe tener al menos 8 caracteres.')).toBeInTheDocument()
   })
 
-  it('submits valid credentials and stores the returned session tokens', async () => {
+  it('submits valid credentials and stores the returned access token', async () => {
     let receivedBody: unknown
     server.use(
       http.post('*/api/auth/login', async ({ request }) => {
         receivedBody = await request.json()
-        return HttpResponse.json({ accessToken, refreshToken: 'refresh-token' })
+        return HttpResponse.json({ accessToken })
       }),
+      http.get('*/api/users/me', () => HttpResponse.json({
+        id: 'user-1',
+        email: 'reader@example.com',
+        username: 'reader',
+        passwordConfigured: true,
+      })),
     )
     const user = userEvent.setup()
     renderLoginPage()
@@ -52,6 +61,5 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(receivedBody).toEqual({ email: 'reader@example.com', password: 'password123' }))
     expect(authTokenStore.getAccessToken()).toBe(accessToken)
-    expect(authTokenStore.getRefreshToken()).toBe('refresh-token')
   })
 })

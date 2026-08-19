@@ -34,8 +34,8 @@ export function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: login,
     meta: { successMessage: 'Sesión iniciada correctamente.' },
-    onSuccess: (tokens) => {
-      signIn(tokens)
+    onSuccess: async ({ accessToken }) => {
+      await signIn(accessToken)
       navigate('/books', { replace: true })
     },
   })

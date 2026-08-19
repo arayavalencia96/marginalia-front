@@ -13,5 +13,5 @@ export interface ChangeUsernameRequest {
 }
 
 export interface DeleteAccountRequest {
-  password: string
+  password?: string
 }

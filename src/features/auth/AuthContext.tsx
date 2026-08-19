@@ -6,79 +6,85 @@ import {
   type PropsWithChildren,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { logout, refreshSession } from '../../api/auth'
+import { getCurrentUser } from '../../api/users'
 import { registerSessionExpiredHandler } from '../../lib/authSession'
 import { authTokenStore } from '../../lib/authTokenStore'
-import type { AuthenticatedUser, AuthTokens } from '../../types/auth'
+import type { AuthenticatedUser } from '../../types/auth'
 import { authContext, type AuthContextValue } from './authContextDefinition'
-
-interface AccessTokenPayload {
-  sub?: unknown
-  email?: unknown
-}
-
-function getUserFromAccessToken(accessToken: string): AuthenticatedUser | undefined {
-  try {
-    const payloadSegment = accessToken.split('.')[1]
-
-    if (!payloadSegment) {
-      return undefined
-    }
-
-    const payloadJson = atob(
-      payloadSegment.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payloadSegment.length / 4) * 4, '='),
-    )
-    const payload = JSON.parse(payloadJson) as AccessTokenPayload
-
-    if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') {
-      return undefined
-    }
-
-    return { id: payload.sub, email: payload.email }
-  } catch {
-    return undefined
-  }
-}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const navigate = useNavigate()
-  const [user, setUser] = useState<AuthenticatedUser | undefined>(() => {
-    const accessToken = authTokenStore.getAccessToken()
-    return accessToken ? getUserFromAccessToken(accessToken) : undefined
-  })
+  const [user, setUser] = useState<AuthenticatedUser>()
+  const [isInitializing, setIsInitializing] = useState(true)
 
-  const signIn = useCallback((tokens: AuthTokens): void => {
-    authTokenStore.set(tokens)
-    setUser(getUserFromAccessToken(tokens.accessToken))
-  }, [])
-
-  const signInWithAccessToken = useCallback((accessToken: string): void => {
-    authTokenStore.updateAccessToken(accessToken)
-    setUser(getUserFromAccessToken(accessToken))
-  }, [])
-
-  const signOut = useCallback((): void => {
+  const clearSession = useCallback((): void => {
     authTokenStore.clear()
     setUser(undefined)
   }, [])
 
+  const refreshUser = useCallback(async (): Promise<void> => {
+    setUser(await getCurrentUser())
+  }, [])
+
+  const signIn = useCallback(async (accessToken: string): Promise<void> => {
+    authTokenStore.set(accessToken)
+    try {
+      await refreshUser()
+    } catch (error) {
+      authTokenStore.clear()
+      throw error
+    }
+  }, [refreshUser])
+
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      await logout()
+    } finally {
+      clearSession()
+    }
+  }, [clearSession])
+
+  useEffect(() => {
+    let isCurrent = true
+
+    const restoreSession = async (): Promise<void> => {
+      try {
+        const { accessToken } = await refreshSession()
+        if (isCurrent) await signIn(accessToken)
+      } catch {
+        if (isCurrent) clearSession()
+      } finally {
+        if (isCurrent) setIsInitializing(false)
+      }
+    }
+
+    void restoreSession()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [clearSession, signIn])
+
   useEffect(
     () =>
       registerSessionExpiredHandler(() => {
-        signOut()
+        clearSession()
         navigate('/login', { replace: true })
       }),
-    [navigate, signOut],
+    [clearSession, navigate],
   )
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isAuthenticated: Boolean(user),
+      isInitializing,
       signIn,
-      signInWithAccessToken,
       signOut,
+      refreshUser,
     }),
-    [signIn, signInWithAccessToken, signOut, user],
+    [isInitializing, refreshUser, signIn, signOut, user],
   )
 
   return <authContext.Provider value={value}>{children}</authContext.Provider>
