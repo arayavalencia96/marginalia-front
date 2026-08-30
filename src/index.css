@@ -134,9 +134,34 @@ main.mx-auto > section.bg-white, main.mx-auto article.bg-white, main.mx-auto asi
 .book-card-actions .danger { margin-left: auto; color: #b33b32; }
 .book-card-actions .danger:hover { background: #fbe9e7; }
 .chapter-sidebar { position: sticky; top: 94px; align-self: start; max-height: calc(100vh - 120px); overflow-y: auto; border-color: var(--line) !important; }
-.reading-panel { min-height: 520px; border-color: var(--line) !important; background: linear-gradient(110deg, var(--paper), color-mix(in srgb, var(--paper-soft) 45%, var(--paper))) !important; }
-.reading-panel > div:first-child { padding-bottom: 1.1rem; border-bottom: 1px solid var(--line); }
-.reading-panel article { background: color-mix(in srgb, var(--paper) 82%, transparent); border-color: var(--line) !important; box-shadow: 0 7px 20px color-mix(in srgb, var(--accent-strong) 7%, transparent); }
+.reading-panel { min-height: 620px; border-color: var(--line) !important; background: linear-gradient(110deg, var(--paper), color-mix(in srgb, var(--paper-soft) 30%, var(--paper))) !important; }
+.reading-panel > header { border-bottom: 1px solid var(--line); }
+.reading-panel .document-block { background: transparent; box-shadow: none; }
+.question-answer-card { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--paper-soft) 88%, var(--paper)); }
+.question-answer-label { color: var(--accent); }
+.question-answer-question { color: var(--ink); }
+.question-answer-response { border-color: color-mix(in srgb, var(--accent) 65%, var(--line)); }
+.question-answer-text { color: var(--muted); }
+.question-answer-action { color: var(--accent-strong); }
+.question-answer-action:hover { color: var(--accent); }
+.question-answer-reveal { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--paper); color: var(--accent-strong); }
+.question-answer-reveal:hover { background: var(--accent-soft); }
+.pdf-preview-panel { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: .8rem; background: color-mix(in srgb, var(--paper) 90%, transparent); box-shadow: var(--shadow); }
+.pdf-preview-paper { min-height: 29.7rem; aspect-ratio: 210 / 297; padding: 8% 9%; color: #1e293b !important; background: #fff !important; }
+:root[data-theme="dark"] .pdf-preview-paper, :root[data-theme="dark"] .pdf-preview-paper * { color-scheme: light; }
+
+@media (max-width: 1023px) {
+  .chapter-sidebar { position: static; max-height: none; overflow-y: visible; }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .pdf-preview-panel { grid-column: 2; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .insertion-button { opacity: .65 !important; }
+  .group\/sortable > button[aria-label="Reordenar anotación"] { opacity: .75; }
+}
 
 @media (max-width: 860px) {
   .site-header-inner { flex-wrap: wrap; gap: .6rem; padding: .75rem 0; }

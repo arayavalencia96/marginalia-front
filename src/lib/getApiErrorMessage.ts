@@ -6,6 +6,7 @@ interface ApiErrorResponse {
 
 const translatedMessages: Record<string, string> = {
   'Image could not be uploaded': 'No pudimos subir la imagen. Revisa la configuración de Cloudinary e inténtalo nuevamente.',
+  'Image could not be deleted': 'No pudimos eliminar la imagen. Inténtalo nuevamente.',
   'Invalid email or password': 'El correo electrónico o la contraseña son incorrectos.',
   'User is disabled': 'La cuenta todavía no fue verificada.',
 }

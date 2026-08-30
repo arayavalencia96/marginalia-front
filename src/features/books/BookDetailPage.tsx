@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type TouchEventHandler } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { Link, useParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -12,6 +13,7 @@ import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import type { ChapterRequest, ChapterResponse } from '../../types/chapter'
 
 const ChapterContentPanel = lazy(() => import('../blocks/ChapterContentPanel').then(({ ChapterContentPanel }) => ({ default: ChapterContentPanel })))
+const ChapterPagePreview = lazy(() => import('../blocks/ChapterPagePreview').then(({ ChapterPagePreview }) => ({ default: ChapterPagePreview })))
 
 const chapterTitleSchema = z.object({
   title: z.string().trim().min(1, 'El título es obligatorio.').max(255, 'El título no puede superar los 255 caracteres.'),
@@ -28,7 +30,8 @@ interface ChapterTreeProps {
   onCancelEdit: () => void
   onDelete: (chapter: ChapterResponse) => void
   onEdit: (chapter: ChapterResponse) => void
-  onOpenMenu: (chapterId: string) => void
+  menuPosition: { left: number; top: number } | undefined
+  onOpenMenu: (chapterId: string, anchor: HTMLElement) => void
   onSelect: (chapterId: string) => void
   onStartSubChapter: (chapterId: string) => void
   onToggle: (chapterId: string) => void
@@ -83,7 +86,9 @@ function DropAsChildZone({ chapterId }: { chapterId: string }) {
 }
 
 function SortableChapterNode({ chapter, props }: { chapter: ChapterResponse; props: ChapterTreeProps }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: chapter.id })
+  const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({ id: chapter.id })
+  const { onTouchStart, ...mouseListeners } = listeners ?? {}
+  const touchListener = onTouchStart as TouchEventHandler<HTMLDivElement> | undefined
   const renameForm = useForm<ChapterTitleFormValues>({ resolver: zodResolver(chapterTitleSchema) })
   const hasChildren = (props.chaptersByParentId.get(chapter.id)?.length ?? 0) > 0
   const isEditing = props.editingChapterId === chapter.id
@@ -96,12 +101,17 @@ function SortableChapterNode({ chapter, props }: { chapter: ChapterResponse; pro
   }, [chapter.title, isEditing, renameForm])
 
   return (
-    <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }}>
+    <li
+      className={isDragging ? 'rounded-lg bg-amber-50/70 ring-2 ring-inset ring-amber-400' : ''}
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+    >
       <div
-        className="flex min-w-0 items-center gap-1"
+        className={`flex min-w-0 items-center gap-1 ${isDragging ? 'opacity-20' : ''}`}
+        onTouchStart={touchListener}
         onContextMenu={(event) => {
           event.preventDefault()
-          props.onOpenMenu(chapter.id)
+          props.onOpenMenu(chapter.id, event.currentTarget)
         }}
       >
         <button
@@ -110,7 +120,7 @@ function SortableChapterNode({ chapter, props }: { chapter: ChapterResponse; pro
           disabled={isEditing}
           type="button"
           {...attributes}
-          {...listeners}
+          {...mouseListeners}
         >
           ⠿
         </button>
@@ -134,23 +144,26 @@ function SortableChapterNode({ chapter, props }: { chapter: ChapterResponse; pro
           </form>
         ) : (
           <button
+            aria-label={chapter.title}
             className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-left text-sm transition ${isSelected ? 'bg-slate-900 font-medium text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'}`}
             onClick={() => props.onSelect(chapter.id)}
+            title={chapter.title}
             type="button"
           >
-            <span className="block truncate">{chapter.title}</span>
+            <span className="block break-words sm:truncate">{chapter.title}</span>
           </button>
         )}
 
         {!isEditing && (
           <div className="relative">
-            <button aria-expanded={isMenuOpen} aria-label={`Acciones para ${chapter.title}`} className="grid size-7 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={() => props.onOpenMenu(chapter.id)} type="button">⋯</button>
-            {isMenuOpen && (
-              <div className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+            <button aria-expanded={isMenuOpen} aria-label={`Acciones para ${chapter.title}`} className="grid size-7 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={(event) => props.onOpenMenu(chapter.id, event.currentTarget)} type="button">⋯</button>
+            {isMenuOpen && props.menuPosition && createPortal(
+              <div className="fixed z-[70] w-40 rounded-md border border-slate-200 bg-white py-1 shadow-xl" style={{ left: props.menuPosition.left, top: props.menuPosition.top }}>
                 <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" onClick={() => props.onStartSubChapter(chapter.id)} type="button">Agregar subcapítulo</button>
                 <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" onClick={() => props.onEdit(chapter)} type="button">Renombrar</button>
                 <button className="w-full px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50" onClick={() => props.onDelete(chapter)} type="button">Eliminar</button>
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         )}
@@ -185,8 +198,12 @@ function ChapterTree(props: ChapterTreeProps) {
 export function BookDetailPage() {
   const { bookId } = useParams()
   const queryClient = useQueryClient()
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 350, tolerance: 8 } }),
+  )
   const [activeMenuChapterId, setActiveMenuChapterId] = useState<string>()
+  const [activeMenuPosition, setActiveMenuPosition] = useState<{ left: number; top: number }>()
   const [createParentChapterId, setCreateParentChapterId] = useState<string | null | undefined>()
   const [draggedChapterId, setDraggedChapterId] = useState<string>()
   const [editingChapterId, setEditingChapterId] = useState<string>()
@@ -270,6 +287,20 @@ export function BookDetailPage() {
     })
   }
 
+  function toggleChapterMenu(chapterId: string, anchor: HTMLElement): void {
+    if (activeMenuChapterId === chapterId) {
+      setActiveMenuChapterId(undefined)
+      setActiveMenuPosition(undefined)
+      return
+    }
+    const bounds = anchor.getBoundingClientRect()
+    setActiveMenuChapterId(chapterId)
+    setActiveMenuPosition({
+      left: Math.max(8, Math.min(window.innerWidth - 168, bounds.right - 160)),
+      top: Math.min(window.innerHeight - 132, bounds.bottom + 4),
+    })
+  }
+
   function isDescendant(candidateParentId: string | null, chapterId: string, chapters: ChapterResponse[]): boolean {
     let currentParentId = candidateParentId
     while (currentParentId) {
@@ -333,16 +364,19 @@ export function BookDetailPage() {
   if (!bookId) return <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6"><p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">El identificador del libro no es válido.</p></main>
 
   const createParentTitle = createParentChapterId ? chaptersQuery.data?.find((chapter) => chapter.id === createParentChapterId)?.title : undefined
+  const selectedChapter = chaptersQuery.data?.find((chapter) => chapter.id === selectedChapterId)
+  const draggedChapter = chaptersQuery.data?.find((chapter) => chapter.id === draggedChapterId)
   const treeProps: Omit<ChapterTreeProps, 'parentChapterId'> = {
     activeMenuChapterId,
     chaptersByParentId,
     editingChapterId,
     expandedChapterIds,
     isDragging: Boolean(draggedChapterId),
+    menuPosition: activeMenuPosition,
     onCancelEdit: () => setEditingChapterId(undefined),
     onDelete: (chapter) => { setActiveMenuChapterId(undefined); setChapterToDelete(chapter) },
     onEdit: (chapter) => { setActiveMenuChapterId(undefined); setEditingChapterId(chapter.id) },
-    onOpenMenu: (chapterId) => setActiveMenuChapterId((current) => current === chapterId ? undefined : chapterId),
+    onOpenMenu: toggleChapterMenu,
     onSelect: setSelectedChapterId,
     onStartSubChapter: openCreateChapter,
     onToggle: toggleChapter,
@@ -351,24 +385,40 @@ export function BookDetailPage() {
   }
 
   return (
-    <main className="book-detail-page mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
+    <main className="book-detail-page mx-auto min-h-screen max-w-[1800px] px-4 py-10 sm:px-6">
       <Link className="text-sm font-medium text-slate-700 underline hover:text-slate-950" to="/books">← Volver a mis libros</Link>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
         <div><h1 className="text-3xl font-semibold tracking-tight text-slate-900">Capítulos</h1><p className="mt-2 text-sm text-slate-600">Arrastra desde ⠿ para reordenar o soltar dentro de un capítulo.</p></div>
         <button className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700" onClick={() => openCreateChapter(null)} type="button">Agregar capítulo</button>
       </div>
-      <div className="mt-8 grid min-h-96 gap-6 lg:grid-cols-[20rem_1fr]">
+      <div className="mt-8 grid min-h-96 items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[18rem_minmax(32rem,1fr)_22rem]">
         <aside className="chapter-sidebar rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Árbol de capítulos">
           <h2 className="px-2 pb-3 text-sm font-semibold text-slate-900">Índice</h2>
           {chaptersQuery.isPending && <p className="px-2 text-sm text-slate-600">Cargando capítulos...</p>}
           {chaptersQuery.isError && <div className="px-2 text-sm text-red-700" role="alert"><p>{getApiErrorMessage(chaptersQuery.error)}</p><button className="mt-3 font-semibold underline" onClick={() => chaptersQuery.refetch()} type="button">Reintentar</button></div>}
           {chaptersQuery.data && chaptersQuery.data.length === 0 && <p className="px-2 text-sm text-slate-600">Este libro todavía no tiene capítulos.</p>}
           {reorderChapterMutation.isError && <p className="mx-2 mb-3 rounded bg-red-50 px-2 py-1 text-xs text-red-700" role="alert">{getApiErrorMessage(reorderChapterMutation.error)}</p>}
-          {chaptersQuery.data && chaptersQuery.data.length > 0 && <DndContext collisionDetection={closestCenter} onDragCancel={() => setDraggedChapterId(undefined)} onDragEnd={handleDragEnd} onDragStart={(event) => setDraggedChapterId(String(event.active.id))} sensors={sensors}><ChapterTree {...treeProps} parentChapterId={null} /></DndContext>}
+          {chaptersQuery.data && chaptersQuery.data.length > 0 && (
+            <DndContext collisionDetection={closestCenter} onDragCancel={() => setDraggedChapterId(undefined)} onDragEnd={handleDragEnd} onDragStart={(event) => setDraggedChapterId(String(event.active.id))} sensors={sensors}>
+              <ChapterTree {...treeProps} parentChapterId={null} />
+              <DragOverlay dropAnimation={null}>
+                {draggedChapter ? (
+                  <div className="pointer-events-none flex w-64 max-w-[calc(100vw-2rem)] items-center gap-3 rounded-xl border-2 border-amber-500 bg-white px-3 py-3 text-slate-900 shadow-2xl">
+                    <span aria-hidden="true" className="text-lg text-amber-700">⠿</span>
+                    <div className="min-w-0">
+                      <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-amber-700">Moviendo capítulo</p>
+                      <p className="truncate text-sm font-semibold">{draggedChapter.title}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          )}
         </aside>
-        {selectedChapterId
-          ? <Suspense fallback={<section className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Cargando contenido...</section>}><ChapterContentPanel chapterId={selectedChapterId} /></Suspense>
+        {selectedChapterId && selectedChapter
+          ? <Suspense fallback={<section className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Cargando contenido...</section>}><ChapterContentPanel chapterId={selectedChapterId} chapterTitle={selectedChapter.title} /></Suspense>
           : <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">Selecciona un capítulo del índice para ver su contenido.</section>}
+        {selectedChapterId && selectedChapter && <Suspense fallback={<aside className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 lg:col-start-2 xl:col-start-auto">Preparando vista previa...</aside>}><ChapterPagePreview chapterId={selectedChapterId} chapterTitle={selectedChapter.title} /></Suspense>}
       </div>
 
       {createParentChapterId !== undefined && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="presentation"><section aria-labelledby="create-chapter-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog"><h2 className="text-xl font-semibold text-slate-900" id="create-chapter-title">{createParentChapterId ? 'Agregar subcapítulo' : 'Agregar capítulo'}</h2>{createParentTitle && <p className="mt-1 text-sm text-slate-600">Dentro de: {createParentTitle}</p>}<form className="mt-6 space-y-4" noValidate onSubmit={createForm.handleSubmit(({ title }) => createChapterMutation.mutate({ title, parentChapterId: createParentChapterId }))}><div><label className="block text-sm font-medium text-slate-700" htmlFor="chapter-title">Título</label><input autoFocus className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="chapter-title" aria-invalid={Boolean(createForm.formState.errors.title)} {...createForm.register('title')} />{createForm.formState.errors.title && <p className="mt-1 text-sm text-red-600">{createForm.formState.errors.title.message}</p>}</div>{createChapterMutation.isError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(createChapterMutation.error)}</p>}<div className="flex justify-end gap-3"><button className="rounded-md px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" disabled={createChapterMutation.isPending} onClick={closeCreateChapter} type="button">Cancelar</button><button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-400" disabled={createChapterMutation.isPending} type="submit">{createChapterMutation.isPending ? 'Creando...' : 'Crear'}</button></div></form></section></div>}

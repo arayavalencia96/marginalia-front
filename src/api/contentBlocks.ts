@@ -1,5 +1,5 @@
 import { apiClient } from '../lib/apiClient'
-import type { AttachmentResponse, ContentBlockRequest, ContentBlockResponse } from '../types/contentBlock'
+import type { AttachmentResponse, ContentBlockOrderRequest, ContentBlockRequest, ContentBlockResponse } from '../types/contentBlock'
 
 /**
  * Retrieves the ordered content blocks of a chapter.
@@ -34,6 +34,11 @@ export async function createContentBlock(chapterId: string, request: ContentBloc
 export async function updateContentBlock(blockId: string, request: ContentBlockRequest): Promise<ContentBlockResponse> {
   const { data } = await apiClient.put<ContentBlockResponse>(`/api/blocks/${blockId}`, request)
   return data
+}
+
+/** Persists the complete order of a chapter's content blocks. */
+export async function reorderContentBlocks(chapterId: string, requests: ContentBlockOrderRequest[]): Promise<void> {
+  await apiClient.put(`/api/chapters/${chapterId}/blocks/order`, requests)
 }
 
 /**
@@ -78,4 +83,8 @@ export async function uploadBlockAttachment(
     },
   })
   return data
+}
+
+export async function deleteBlockAttachment(blockId: string, attachmentId: string): Promise<void> {
+  await apiClient.delete(`/api/blocks/${blockId}/attachments/${attachmentId}`)
 }

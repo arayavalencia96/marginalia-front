@@ -18,6 +18,17 @@ interface LoginLocationState {
   successMessage?: string
 }
 
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="size-5 shrink-0" viewBox="0 0 24 24">
+      <path d="M21.8 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.5a4.7 4.7 0 0 1-2.04 3.08v2.53h3.3c1.94-1.78 3.04-4.4 3.04-7.45Z" fill="#4285F4" />
+      <path d="M12 22c2.76 0 5.08-.92 6.77-2.48l-3.31-2.53c-.92.62-2.09.98-3.46.98-2.67 0-4.93-1.8-5.74-4.22H2.84v2.61A10.23 10.23 0 0 0 12 22Z" fill="#34A853" />
+      <path d="M6.26 13.75A6.15 6.15 0 0 1 5.94 12c0-.61.11-1.2.32-1.75V7.64H2.84A10.03 10.03 0 0 0 1.8 12c0 1.56.37 3.04 1.04 4.36l3.42-2.61Z" fill="#FBBC05" />
+      <path d="M12 6.03c1.5 0 2.85.52 3.91 1.53l2.94-2.94A9.86 9.86 0 0 0 12 2a10.23 10.23 0 0 0-9.16 5.64l3.42 2.61C7.07 7.83 9.33 6.03 12 6.03Z" fill="#EA4335" />
+    </svg>
+  )
+}
+
 export function LoginPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -117,10 +128,11 @@ export function LoginPage() {
           </div>
 
           <button
-            className="w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            className="flex w-full items-center justify-center gap-3 rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
             onClick={continueWithGoogle}
             type="button"
           >
+            <GoogleIcon />
             Continuar con Google
           </button>
         </form>
