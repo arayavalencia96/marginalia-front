@@ -8,25 +8,33 @@ import { BookDetailPage } from './BookDetailPage'
 
 vi.mock('@dnd-kit/core', () => ({
   closestCenter: vi.fn(),
+  DragOverlay: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DndContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (event: { active: { id: string }; over: { id: string } }) => void }) => (
     <div>
       <button onClick={() => onDragEnd({ active: { id: 'chapter-b' }, over: { id: 'chapter-a' } })} type="button">Simular reordenamiento</button>
       {children}
     </div>
   ),
-  PointerSensor: class PointerSensor {},
+  MouseSensor: class MouseSensor {},
+  TouchSensor: class TouchSensor {},
   useDroppable: () => ({ isOver: false, setNodeRef: () => undefined }),
   useSensor: () => ({}),
   useSensors: () => [],
 }))
 
 vi.mock('@dnd-kit/sortable', () => ({
+  arrayMove: <T,>(items: T[], from: number, to: number): T[] => {
+    const reordered = [...items]
+    const [moved] = reordered.splice(from, 1)
+    reordered.splice(to, 0, moved)
+    return reordered
+  },
   SortableContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useSortable: () => ({ attributes: {}, listeners: {}, setNodeRef: () => undefined, transform: null, transition: undefined }),
   verticalListSortingStrategy: vi.fn(),
 }))
 
-vi.mock('@dnd-kit/utilities', () => ({ CSS: { Transform: { toString: () => undefined } } }))
+vi.mock('@dnd-kit/utilities', () => ({ CSS: { Translate: { toString: () => undefined } } }))
 
 function renderBookDetailPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -67,5 +75,26 @@ describe('BookDetailPage chapter tree', () => {
       { id: 'chapter-a', body: { title: 'Primer capítulo', parentChapterId: null, orderIndex: 1 } },
       { id: 'chapter-b', body: { title: 'Segundo capítulo', parentChapterId: null, orderIndex: 0 } },
     ]))
+  })
+
+  it('shows the selected chapter title, PDF preview and unclipped action menu', async () => {
+    const longTitle = 'Un capítulo con un nombre suficientemente largo para necesitar ayuda visual'
+    server.use(
+      http.get('*/api/books/book-1/chapters', () => HttpResponse.json([
+        { id: 'chapter-long', bookId: 'book-1', title: longTitle, parentChapterId: null, orderIndex: 0 },
+      ])),
+      http.get('*/api/chapters/chapter-long/blocks', () => HttpResponse.json([])),
+    )
+    renderBookDetailPage()
+
+    const chapterButton = await screen.findByRole('button', { name: longTitle })
+    expect(chapterButton).toHaveAttribute('title', longTitle)
+    chapterButton.click()
+
+    await waitFor(() => expect(screen.getAllByRole('heading', { name: longTitle })).toHaveLength(2), { timeout: 5_000 })
+    expect(screen.getByRole('complementary', { name: 'Vista previa del capítulo en PDF' })).toBeInTheDocument()
+
+    screen.getByRole('button', { name: `Acciones para ${longTitle}` }).click()
+    expect(await screen.findByRole('button', { name: 'Agregar subcapítulo' })).toBeInTheDocument()
   })
 })

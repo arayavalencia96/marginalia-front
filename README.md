@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# Marginalia Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicación React para organizar libros y tomar anotaciones dentro de capítulos y subcapítulos. El editor funciona como una hoja continua: permite escribir e insertar bloques en cualquier posición sin abandonar el capítulo.
 
-Currently, two official plugins are available:
+## Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Registro, verificación de cuenta, login tradicional y Google OAuth2.
+- CRUD de libros y árbol recursivo de capítulos.
+- Hoja de notas continua con inserción entre bloques.
+- Texto libre, títulos, subtítulos y listas con viñetas, números o letras.
+- Bloques de código, fórmulas LaTeX, ejercicios, preguntas con respuestas e imágenes.
+- Descripciones opcionales para código, fórmulas, ejercicios e imágenes.
+- Galerías de múltiples imágenes centradas, carga con progreso y vista ampliada.
+- Modo de repaso que oculta las respuestas hasta revelarlas.
+- Borradores automáticos almacenados localmente por capítulo, posición y tipo de bloque.
+- Guardado mediante botón, `Ctrl/Cmd + S` o `Ctrl/Cmd + Enter`; `Escape` cierra un editor secundario.
+- Exportación de libros a PDF y consulta de exportaciones asíncronas.
 
-## React Compiler
+Los borradores locales no crean contenido incompleto en la API. Se eliminan únicamente cuando el servidor confirma la creación o actualización del bloque.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+- React 18 y TypeScript.
+- Vite 8 y Tailwind CSS 4.
+- TanStack Query y Axios.
+- React Hook Form, Zod y Sonner.
+- KaTeX y React Syntax Highlighter.
+- Vitest, Testing Library y MSW.
+- Oxlint y ESLint.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Configuración
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+Crear `.env` en la raíz del frontend:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Instalar dependencias y levantar el entorno local:
+
+```powershell
+npm install
+npm run dev
+```
+
+## Calidad
+
+```powershell
+npm run lint
+npm run lint:eslint
+npm test
+npm run build
+```
+
+Las pruebas del editor usan MSW para validar creación, edición y eliminación de bloques, recuperación de borradores, atajos, modo de repaso y vista ampliada de imágenes.

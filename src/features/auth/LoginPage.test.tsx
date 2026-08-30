@@ -62,4 +62,11 @@ describe('LoginPage', () => {
     await waitFor(() => expect(receivedBody).toEqual({ email: 'reader@example.com', password: 'password123' }))
     expect(authTokenStore.getAccessToken()).toBe(accessToken)
   })
+
+  it('shows the Google brand icon in the OAuth button', () => {
+    renderLoginPage()
+
+    const googleButton = screen.getByRole('button', { name: 'Continuar con Google' })
+    expect(googleButton.querySelector('svg')).toBeInTheDocument()
+  })
 })

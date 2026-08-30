@@ -1,12 +1,14 @@
-export type ContentBlockType = 'NOTE' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'IMAGE'
+export type ContentBlockType = 'NOTE' | 'HEADING' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'QUESTION_ANSWER' | 'IMAGE'
+export type HeadingLevel = 'TITLE' | 'SUBTITLE'
+export type StepStyle = 'NUMERIC' | 'ALPHABETIC' | 'BULLETED'
 
 export interface StepListBlockResponse {
-  stepStyle: 'NUMERIC' | 'ALPHABETIC'
+  stepStyle: StepStyle
   steps: string[]
 }
 
 export interface StepListBlockRequest {
-  stepStyle: 'NUMERIC' | 'ALPHABETIC'
+  stepStyle: StepStyle
   steps: string[]
 }
 
@@ -15,6 +17,9 @@ export interface ContentBlockResponse {
   chapterId: string
   type: ContentBlockType
   content: string | null
+  answer?: string | null
+  description?: string | null
+  headingLevel?: HeadingLevel | null
   codeLanguage: string | null
   resolved: boolean
   orderIndex: number
@@ -25,9 +30,17 @@ export interface ContentBlockResponse {
 export interface ContentBlockRequest {
   type: ContentBlockType
   content: string | null
+  answer?: string | null
+  description?: string | null
+  headingLevel: HeadingLevel | null
   codeLanguage: string | null
   orderIndex: number
   stepList: StepListBlockRequest | null
+}
+
+export interface ContentBlockOrderRequest {
+  blockId: string
+  orderIndex: number
 }
 
 export interface AttachmentResponse {
