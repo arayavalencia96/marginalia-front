@@ -38,9 +38,10 @@ function PreviewBlock({ block }: { block: ContentBlockResponse }) {
   }
   if (block.type === 'EXERCISE') {
     return (
-      <div>
-        {block.description && <p className="mb-2 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.description}</p>}
-        <p className="whitespace-pre-wrap text-[10px] leading-[1.5]"><span aria-hidden="true">{block.resolved ? '☑' : '☐'}</span> {block.content}</p>
+      <div className="rounded border border-slate-200 p-2">
+        <p className="text-[7px] font-bold uppercase tracking-wide text-slate-500">Ejercicio</p>
+        <p className="mt-1 whitespace-pre-wrap text-[10px] leading-[1.5]"><span aria-hidden="true">{block.resolved ? '☑' : '☐'}</span> {block.content}</p>
+        {block.description && <><p className="mt-2 text-[7px] font-bold uppercase tracking-wide text-slate-500">Resolución</p><p className="mt-1 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.description}</p></>}
       </div>
     )
   }
@@ -57,10 +58,10 @@ function PreviewBlock({ block }: { block: ContentBlockResponse }) {
   if (block.type === 'IMAGE') {
     return (
       <div>
-        {block.description && <p className="mb-2 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.description}</p>}
         <div className={`grid gap-2 ${block.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {block.attachments.map((attachment, index) => <img alt={`Imagen ${index + 1} de la vista previa`} className="mx-auto max-h-40 max-w-full object-contain" key={attachment.id} src={attachment.url} />)}
         </div>
+        {block.description && <p className="mt-2 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.description}</p>}
       </div>
     )
   }
@@ -83,7 +84,7 @@ export function ChapterPagePreview({ chapterId, chapterTitle }: { chapterId: str
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">A4</span>
       </div>
-      <div className="pdf-preview-paper mx-auto w-full overflow-hidden bg-white text-slate-900 shadow-xl" role="document">
+      <div className="pdf-preview-paper mx-auto w-full bg-white text-slate-900 shadow-xl" role="document">
         <header className="border-b border-slate-200 pb-3">
           <p className="text-[7px] font-bold uppercase tracking-[0.18em] text-slate-500">Marginalia</p>
           <h3 className="mt-2 break-words font-serif text-lg font-bold leading-tight">{chapterTitle}</h3>

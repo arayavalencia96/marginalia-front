@@ -4,6 +4,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, TouchEventHandler } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { BlockMath } from 'react-katex'
@@ -23,7 +24,9 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { toast } from 'sonner'
 import 'katex/dist/katex.min.css'
 import { z } from 'zod'
+import { exportChapterPdf } from '../../api/chapters'
 import { createContentBlock, deleteBlockAttachment, deleteContentBlock, getChapterBlocks, reorderContentBlocks, toggleContentBlockResolved, updateContentBlock, uploadBlockAttachment } from '../../api/contentBlocks'
+import { downloadBlob } from '../../lib/downloadBlob'
 import { getApiErrorMessage } from '../../lib/getApiErrorMessage'
 import { removeFormDraft, useFormDraft } from '../../hooks/useFormDraft'
 import type { DraftStatus } from '../../hooks/useFormDraft'
@@ -98,6 +101,11 @@ interface StepListEditorProps {
 interface CreateBlockVariables {
   files?: File[]
   request: ContentBlockRequest
+}
+
+interface BlockMenuState {
+  block: ContentBlockResponse
+  position: { left: number; top: number }
 }
 
 function handleEditorKeyDown(event: ReactKeyboardEvent<HTMLFormElement>, onCancel?: () => void): void {
@@ -396,9 +404,9 @@ function ExerciseEditor({ draftKey, initialContent, initialDescription, isPendin
     <form className="space-y-4" noValidate onKeyDown={(event) => handleEditorKeyDown(event, onCancel)} onSubmit={form.handleSubmit(onSubmit)}>
       <div>
         <label className="block text-sm font-medium text-slate-700" htmlFor="exercise-description">
-          Descripción <span className="font-normal text-slate-400">(opcional)</span>
+          Resolución <span className="font-normal text-slate-400">(opcional)</span>
         </label>
-        <textarea className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="exercise-description" placeholder="Agrega contexto o indicaciones..." aria-invalid={Boolean(form.formState.errors.description)} {...form.register('description')} />
+        <textarea className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-200" id="exercise-description" placeholder="Escribe la resolución o explicación..." aria-invalid={Boolean(form.formState.errors.description)} {...form.register('description')} />
         {form.formState.errors.description && <p className="mt-1 text-sm text-red-600">{form.formState.errors.description.message}</p>}
       </div>
       <div>
@@ -520,6 +528,16 @@ function ImageComposer({ chapterId, isPending, onCancel, onSubmit, orderIndex }:
 function BlockDescription({ description }: { description: string | null | undefined }) {
   if (!description) return null
   return <p className="mb-4 whitespace-pre-wrap text-base leading-7 text-slate-700">{description}</p>
+}
+
+function ExerciseResolution({ description }: { description: string | null | undefined }) {
+  if (!description) return null
+  return (
+    <div className="mt-4 border-t border-slate-200 pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resolución</p>
+      <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">{description}</p>
+    </div>
+  )
 }
 
 function ImageBlock({ attachments, blockId, deleteError, deletingAttachmentId, errorMessage, isUploading, onDelete, progress, onUpload }: { attachments: AttachmentResponse[]; blockId: string; deleteError: unknown; deletingAttachmentId: string | undefined; errorMessage: string | undefined; isUploading: boolean; onDelete: (attachment: AttachmentResponse) => Promise<void>; progress: number | undefined; onUpload: (files: File[]) => void }) {
@@ -846,6 +864,8 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
   const scrolledChapterIdRef = useRef<string | undefined>(undefined)
   const [insertionOrderIndex, setInsertionOrderIndex] = useState<number>()
   const [editingBlockId, setEditingBlockId] = useState<string>()
+  const [blockMenu, setBlockMenu] = useState<BlockMenuState>()
+  const blockMenuRef = useRef<HTMLDivElement>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string>()
   const [reviewMode, setReviewMode] = useState(false)
   const [revealedAnswerIds, setRevealedAnswerIds] = useState<Set<string>>(() => new Set())
@@ -854,6 +874,24 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
   const [uploadErrorsByBlockId, setUploadErrorsByBlockId] = useState<Record<string, string>>({})
   const [uploadProgressByBlockId, setUploadProgressByBlockId] = useState<Record<string, number>>({})
   const blocksQueryKey = ['chapters', chapterId, 'blocks'] as const
+
+  useEffect(() => {
+    if (!blockMenu) return undefined
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setBlockMenu(undefined)
+    }
+    const closeOnOutsidePointerDown = (event: PointerEvent): void => {
+      if (event.target instanceof Node && !blockMenuRef.current?.contains(event.target)) {
+        setBlockMenu(undefined)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('pointerdown', closeOnOutsidePointerDown)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('pointerdown', closeOnOutsidePointerDown)
+    }
+  }, [blockMenu])
   const blocksQuery = useQuery({
     queryKey: blocksQueryKey,
     queryFn: () => getChapterBlocks(chapterId),
@@ -935,6 +973,14 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     },
     onError: (_error, _blockId, context) => queryClient.setQueryData(blocksQueryKey, context?.previousBlocks),
     onSettled: invalidateBlocks,
+  })
+  const exportChapterMutation = useMutation({
+    mutationFn: () => exportChapterPdf({ id: chapterId, title: chapterTitle }),
+    meta: {
+      pendingMessage: 'Estamos preparando el PDF del capítulo.',
+      successMessage: 'PDF generado. La descarga comenzó automáticamente.',
+    },
+    onSuccess: (document) => downloadBlob(document.blob, document.fileName),
   })
   const reorderBlocksMutation = useMutation({
     mutationFn: (blocks: ContentBlockResponse[]) => reorderContentBlocks(chapterId, blocks.map((block, orderIndex) => ({ blockId: block.id, orderIndex }))),
@@ -1040,9 +1086,33 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     const isEditing = editingBlockId === block.id
     const blockClassName = 'document-block group rounded-lg px-3 py-4 transition hover:bg-white/60'
 
+    function openBlockMenu(event: React.MouseEvent<HTMLElement>): void {
+      event.preventDefault()
+      setBlockMenu({
+        block,
+        position: {
+          left: Math.max(8, Math.min(window.innerWidth - 168, event.clientX)),
+          top: Math.max(8, Math.min(window.innerHeight - 100, event.clientY)),
+        },
+      })
+    }
+
+    function openBlockMenuFromButton(anchor: HTMLElement): void {
+      const bounds = anchor.getBoundingClientRect()
+      setBlockMenu({
+        block,
+        position: {
+          left: Math.max(8, Math.min(window.innerWidth - 168, bounds.right - 160)),
+          top: Math.min(window.innerHeight - 100, bounds.bottom + 4),
+        },
+      })
+    }
+
+    const blockActions = <BlockActions onOpen={openBlockMenuFromButton} />
+
     if (block.type === 'NOTE')
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <TextBlockEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1058,7 +1128,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
           ) : (
             <>
               <p className="whitespace-pre-wrap text-base leading-7 text-slate-800">{block.content}</p>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1068,7 +1138,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
       const headingLevel = block.headingLevel ?? 'SUBTITLE'
       const HeadingTag = headingLevel === 'TITLE' ? 'h3' : 'h4'
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <TextBlockEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1084,7 +1154,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
           ) : (
             <>
               <HeadingTag className={headingLevel === 'TITLE' ? 'text-2xl font-semibold leading-tight text-slate-900' : 'text-xl font-semibold leading-snug text-slate-800'}>{block.content}</HeadingTag>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1098,7 +1168,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
       }
       const ListTag = stepList.stepStyle === 'BULLETED' ? 'ul' : 'ol'
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <StepListEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1126,7 +1196,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
                   </li>
                 ))}
               </ListTag>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1136,7 +1206,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     if (block.type === 'CODE') {
       const codeLanguage = codeLanguages.includes(block.codeLanguage as CodeFormValues['codeLanguage']) ? (block.codeLanguage as CodeFormValues['codeLanguage']) : 'javascript'
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <CodeEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1168,7 +1238,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
               >
                 {block.content ?? ''}
               </SyntaxHighlighter>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1177,7 +1247,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
 
     if (block.type === 'MATH')
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <MathEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1198,7 +1268,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
               <div className="overflow-x-auto rounded-md bg-white/70 p-4 text-slate-900">
                 <BlockMath math={block.content ?? ''} />
               </div>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1206,7 +1276,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
 
     if (block.type === 'EXERCISE')
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <ExerciseEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1223,17 +1293,20 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
             />
           ) : (
             <>
-              <BlockDescription description={block.description} />
-              <label className="flex cursor-pointer items-start gap-3">
-                <input className="mt-1 size-4 accent-slate-900" checked={block.resolved} disabled={toggleExerciseMutation.isPending} onChange={() => toggleExerciseMutation.mutate(block.id)} type="checkbox" />
-                <span className={`whitespace-pre-wrap text-base leading-7 ${block.resolved ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{block.content}</span>
-              </label>
+              <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ejercicio</p>
+                <label className="mt-3 flex cursor-pointer items-start gap-3">
+                  <input className="mt-1 size-4 accent-slate-900" checked={block.resolved} disabled={toggleExerciseMutation.isPending} onChange={() => toggleExerciseMutation.mutate(block.id)} type="checkbox" />
+                  <span className="whitespace-pre-wrap text-base leading-7 text-slate-800">{block.content}</span>
+                </label>
+                <ExerciseResolution description={block.description} />
+              </div>
               {toggleExerciseMutation.isError && (
                 <p className="mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                   {getApiErrorMessage(toggleExerciseMutation.error)}
                 </p>
               )}
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1242,7 +1315,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     if (block.type === 'QUESTION_ANSWER') {
       const answerIsVisible = !reviewMode || revealedAnswerIds.has(block.id)
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <QuestionAnswerEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1272,7 +1345,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
                   <button className="question-answer-reveal mt-4 rounded-md border px-4 py-2 text-sm font-semibold" onClick={() => toggleAnswer(block.id)} type="button">Mostrar respuesta</button>
                 )}
               </div>
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1282,7 +1355,7 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     if (block.type === 'IMAGE') {
       const attachments = [...block.attachments, ...(attachmentsByBlockId[block.id] ?? [])].filter((attachment, index, allAttachments) => allAttachments.findIndex((current) => current.id === attachment.id) === index)
       return (
-        <article className={blockClassName}>
+        <article className={blockClassName} onContextMenu={openBlockMenu}>
           {isEditing ? (
             <DescriptionEditor
               draftKey={editDraftKey(chapterId, block.id)}
@@ -1299,7 +1372,6 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
             />
           ) : (
             <>
-              <BlockDescription description={block.description} />
               <ImageBlock
                 attachments={attachments}
                 blockId={block.id}
@@ -1311,7 +1383,8 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
                 onUpload={(files) => uploadAttachmentMutation.mutate({ blockId: block.id, files })}
                 progress={uploadProgressByBlockId[block.id]}
               />
-              <BlockActions onDelete={() => setBlockToDelete(block)} onEdit={() => startEditing(block)} />
+              <BlockDescription description={block.description} />
+              {blockActions}
             </>
           )}
         </article>
@@ -1341,8 +1414,15 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
           <h2 className="break-words text-xl font-semibold text-slate-900">{chapterTitle}</h2>
           <p className="mt-1 text-sm text-slate-500">Escribe libremente y usa el botón + para insertar contenido en cualquier posición.</p>
         </div>
-        {questionCount > 0 && <button aria-pressed={reviewMode} className={`rounded-md px-4 py-2 text-sm font-semibold transition ${reviewMode ? 'bg-amber-100 text-amber-900 hover:bg-amber-200' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`} onClick={toggleReviewMode} type="button">{reviewMode ? 'Salir del repaso' : 'Iniciar repaso'}</button>}
+        <div className="flex flex-wrap gap-2">
+          <button className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:bg-slate-100" disabled={exportChapterMutation.isPending} onClick={() => exportChapterMutation.mutate()} type="button">
+            {exportChapterMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
+          </button>
+          {questionCount > 0 && <button aria-pressed={reviewMode} className={`rounded-md px-4 py-2 text-sm font-semibold transition ${reviewMode ? 'bg-amber-100 text-amber-900 hover:bg-amber-200' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`} onClick={toggleReviewMode} type="button">{reviewMode ? 'Salir del repaso' : 'Iniciar repaso'}</button>}
+        </div>
       </header>
+
+      {exportChapterMutation.isError && <p className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(exportChapterMutation.error)}</p>}
 
       {reviewMode && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status"><span className="font-semibold">Modo de repaso activo.</span> Respuestas reveladas: {revealedAnswerCount} de {questionCount}.</div>}
       {reorderBlocksMutation.isError && <p className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{getApiErrorMessage(reorderBlocksMutation.error)}</p>}
@@ -1382,6 +1462,24 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
         </div>
       )}
 
+      {blockMenu && createPortal(
+        <div
+          aria-label="Acciones del bloque"
+          className="fixed z-[70] w-40 rounded-md border border-slate-200 bg-white py-1 shadow-xl"
+          ref={blockMenuRef}
+          role="menu"
+          style={{ left: blockMenu.position.left, top: blockMenu.position.top }}
+        >
+          <button className="w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" onClick={() => { setBlockMenu(undefined); startEditing(blockMenu.block) }} role="menuitem" type="button">
+            Editar
+          </button>
+          <button className="w-full px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50" onClick={() => { setBlockMenu(undefined); setBlockToDelete(blockMenu.block) }} role="menuitem" type="button">
+            Eliminar
+          </button>
+        </div>,
+        document.body,
+      )}
+
       {blockToDelete && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="presentation">
           <section aria-labelledby="delete-block-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog">
@@ -1409,14 +1507,11 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
   )
 }
 
-function BlockActions({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {
+function BlockActions({ onOpen }: { onOpen: (anchor: HTMLElement) => void }) {
   return (
-    <div className="mt-4 flex justify-end gap-3">
-      <button className="text-sm font-semibold text-slate-700 underline hover:text-slate-950" onClick={onEdit} type="button">
-        Editar
-      </button>
-      <button className="text-sm font-semibold text-red-700 underline hover:text-red-900" onClick={onDelete} type="button">
-        Eliminar
+    <div className="mt-3 flex justify-end">
+      <button aria-haspopup="menu" aria-label="Acciones del bloque" className="grid size-8 place-items-center rounded text-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 sm:hidden" onClick={(event) => onOpen(event.currentTarget)} type="button">
+        <span aria-hidden="true">⋯</span>
       </button>
     </div>
   )
