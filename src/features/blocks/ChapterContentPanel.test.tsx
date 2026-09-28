@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../test/server'
+import { downloadBlob } from '../../lib/downloadBlob'
 import type { ContentBlockResponse } from '../../types/contentBlock'
 import { ChapterContentPanel } from './ChapterContentPanel'
+
+vi.mock('../../lib/downloadBlob', () => ({ downloadBlob: vi.fn() }))
 
 vi.mock('@dnd-kit/core', () => ({
   closestCenter: vi.fn(),
@@ -61,7 +64,48 @@ function renderContentPanel() {
 }
 
 describe('ChapterContentPanel editors', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    vi.mocked(downloadBlob).mockClear()
+  })
+
+  it('downloads the selected chapter and nested chapters as a PDF', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get(`*/api/chapters/${chapterId}/blocks`, () => HttpResponse.json([])),
+      http.get(`*/api/chapters/${chapterId}/export`, () => new HttpResponse(new Blob(['pdf']), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': "attachment; filename*=UTF-8''Notas%20del%20cap%C3%ADtulo.pdf",
+        },
+      })),
+    )
+    renderContentPanel()
+
+    await user.click(await screen.findByRole('button', { name: 'Descargar PDF' }))
+
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(
+      expect.any(Blob),
+      'Notas del capítulo.pdf',
+    ))
+  })
+
+  it('opens edit and delete options with a secondary click on a block', async () => {
+    server.use(
+      http.get(`*/api/chapters/${chapterId}/blocks`, () => HttpResponse.json([block('NOTE')])),
+    )
+    renderContentPanel()
+
+    const note = await screen.findByText('NOTE content')
+    fireEvent.contextMenu(note.closest('article')!)
+
+    expect(screen.getByRole('menu', { name: 'Acciones del bloque' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeInTheDocument()
+
+    fireEvent.pointerDown(document.body)
+    await waitFor(() => expect(screen.queryByRole('menu', { name: 'Acciones del bloque' })).not.toBeInTheDocument())
+  })
 
   it.each([
     ['NOTE', 'Editar nota', 'Guardar cambios', async (user: ReturnType<typeof userEvent.setup>) => {
@@ -107,14 +151,15 @@ describe('ChapterContentPanel editors', () => {
     const user = userEvent.setup()
     renderContentPanel()
 
-    await screen.findByRole('button', { name: 'Editar' })
-    await user.click(screen.getByRole('button', { name: 'Editar' }))
+    await screen.findByRole('button', { name: 'Acciones del bloque' })
+    await user.click(screen.getByRole('button', { name: 'Acciones del bloque' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Editar' }))
     await edit(user)
     await user.click(screen.getByRole('button', { name: saveLabel }))
     await waitFor(() => expect(updateBody).toMatchObject({ type }))
 
-    await screen.findByRole('button', { name: 'Eliminar' })
-    await user.click(screen.getByRole('button', { name: 'Eliminar' }))
+    await user.click(screen.getByRole('button', { name: 'Acciones del bloque' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Eliminar' }))
     const dialog = await screen.findByRole('dialog', { name: 'Eliminar bloque' })
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(deletedBlockId).toBe(`${type.toLowerCase()}-1`))
@@ -189,7 +234,8 @@ describe('ChapterContentPanel editors', () => {
     await waitFor(() => expect(createRequests.map((request) => request.type)).toEqual(['NOTE', 'HEADING', 'HEADING', 'STEP_LIST', 'CODE', 'MATH', 'EXERCISE', 'QUESTION_ANSWER', 'IMAGE']))
     await waitFor(() => expect(imageUploadReceived).toBe(true))
 
-    await user.click(screen.getAllByRole('button', { name: 'Eliminar' }).at(-1)!)
+    const imageBlock = screen.getByText('chart.png').closest('article')
+    fireEvent.contextMenu(imageBlock!)
     const dialog = await screen.findByRole('dialog', { name: 'Eliminar bloque' })
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(deletedImageBlockId).toBe('block-IMAGE-9'))
