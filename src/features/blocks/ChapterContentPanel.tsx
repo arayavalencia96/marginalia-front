@@ -1,3 +1,5 @@
+import { ExtraBlockEditor, ExtraBlockView } from './ExtraBlocks'
+import { isExtraBlockType, extraBlockLabels } from './extraBlockTypes'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -88,7 +90,7 @@ type MathFormValues = z.infer<typeof mathSchema>
 type ExerciseFormValues = z.infer<typeof exerciseSchema>
 type DescriptionFormValues = z.infer<typeof descriptionSchema>
 type QuestionAnswerFormValues = z.infer<typeof questionAnswerSchema>
-type ComposerMode = 'NOTE' | 'TITLE' | 'SUBTITLE' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'QUESTION_ANSWER' | 'IMAGE'
+type ComposerMode = 'CALLOUT' | 'QUOTE' | 'TODO_LIST' | 'DIVIDER' | 'TABLE' | 'NOTE' | 'TITLE' | 'SUBTITLE' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'QUESTION_ANSWER' | 'IMAGE'
 
 interface StepListEditorProps {
   draftKey: string
@@ -723,6 +725,7 @@ function BlockComposer({ chapterId, error, isPending, onResetError, onSubmit, or
   return (
     <div className="my-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-100 pb-3" aria-label="Tipos de contenido">
+        {extraBlockLabels.map(([type, label]) => <button key={type} className={toolClass(type)} onClick={() => selectBlockType(type)} type="button">{label}</button>)}
         <button className={toolClass('NOTE')} onClick={() => selectBlockType('NOTE')} type="button">
           Texto
         </button>
@@ -765,6 +768,7 @@ function BlockComposer({ chapterId, error, isPending, onResetError, onSubmit, or
         />
       )}
 
+      {isExtraBlockType(blockType) && <ExtraBlockEditor key={blockType} type={blockType} draftKey={composerDraftKey(chapterId, orderIndex, blockType)} isPending={isPending} onCancel={() => selectBlockType('NOTE')} onSubmit={(content) => onSubmit({ ...toNoteRequest(content, orderIndex), type: blockType })} />}
       {blockType === 'STEP_LIST' && <StepListEditor draftKey={composerDraftKey(chapterId, orderIndex, blockType)} initialStepList={{ stepStyle: 'BULLETED', steps: [''] }} isPending={isPending} onCancel={() => selectBlockType('NOTE')} onSubmit={(stepList) => onSubmit(toStepListRequest(stepList, orderIndex))} />}
       {blockType === 'CODE' && <CodeEditor draftKey={composerDraftKey(chapterId, orderIndex, blockType)} initialCodeLanguage="javascript" initialContent="" initialDescription="" isPending={isPending} onCancel={() => selectBlockType('NOTE')} onSubmit={({ content, codeLanguage, description }) => onSubmit(toCodeRequest(content, codeLanguage, description, orderIndex))} />}
       {blockType === 'MATH' && <MathEditor draftKey={composerDraftKey(chapterId, orderIndex, blockType)} initialContent="" initialDescription="" isPending={isPending} onCancel={() => selectBlockType('NOTE')} onSubmit={({ content, description }) => onSubmit(toMathRequest(content, description, orderIndex))} />}
@@ -793,6 +797,7 @@ function InsertionDivider({ onInsert }: { onInsert: () => void }) {
 }
 
 const blockTypeLabels: Record<ContentBlockResponse['type'], string> = {
+  CALLOUT: 'Callout', QUOTE: 'Cita', TODO_LIST: 'Tareas', DIVIDER: 'Divisor', TABLE: 'Tabla',
   NOTE: 'Texto',
   HEADING: 'Título',
   STEP_LIST: 'Lista',
@@ -1109,6 +1114,11 @@ export function ChapterContentPanel({ chapterId, chapterTitle = 'Notas del capí
     }
 
     const blockActions = <BlockActions onOpen={openBlockMenuFromButton} />
+
+    if (isExtraBlockType(block.type)) return <article className={blockClassName} onContextMenu={openBlockMenu}>
+      {isEditing ? <ExtraBlockEditor type={block.type} draftKey={editDraftKey(chapterId, block.id)} initialContent={block.content ?? ''} isPending={updateBlockMutation.isPending} onCancel={() => setEditingBlockId(undefined)} onSubmit={(content) => updateBlockMutation.mutate({ blockId: block.id, request: { ...toNoteRequest(content, block.orderIndex), type: block.type } })} /> : <><ExtraBlockView type={block.type} content={block.content ?? ''} onChange={(content) => updateBlockMutation.mutate({ blockId: block.id, request: { ...toNoteRequest(content, block.orderIndex), type: block.type } })} disabled={updateBlockMutation.isPending} />{blockActions}</>}
+      {updateBlockMutation.isError && updateBlockMutation.variables?.blockId === block.id && <p role="alert">{getApiErrorMessage(updateBlockMutation.error)}</p>}
+    </article>
 
     if (block.type === 'NOTE')
       return (
