@@ -1,1 +1,1 @@
-npx lint-staged
+sh .husky/run-npm.sh exec --no -- lint-staged

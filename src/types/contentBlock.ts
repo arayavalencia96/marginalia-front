@@ -1,4 +1,4 @@
-export type ContentBlockType = 'NOTE' | 'HEADING' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'QUESTION_ANSWER' | 'IMAGE'
+export type ContentBlockType = 'CALLOUT' | 'QUOTE' | 'TODO_LIST' | 'DIVIDER' | 'TABLE' | 'NOTE' | 'HEADING' | 'STEP_LIST' | 'CODE' | 'MATH' | 'EXERCISE' | 'QUESTION_ANSWER' | 'IMAGE'
 export type HeadingLevel = 'TITLE' | 'SUBTITLE'
 export type StepStyle = 'NUMERIC' | 'ALPHABETIC' | 'BULLETED'
 

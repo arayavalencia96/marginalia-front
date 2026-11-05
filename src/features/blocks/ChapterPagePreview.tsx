@@ -1,3 +1,5 @@
+import { ExtraBlockView } from './ExtraBlocks'
+import { isExtraBlockType } from './extraBlockTypes'
 import { useQuery } from '@tanstack/react-query'
 import { BlockMath } from 'react-katex'
 import 'katex/dist/katex.min.css'
@@ -5,6 +7,7 @@ import { getChapterBlocks } from '../../api/contentBlocks'
 import type { ContentBlockResponse } from '../../types/contentBlock'
 
 function PreviewBlock({ block }: { block: ContentBlockResponse }) {
+  if (isExtraBlockType(block.type)) return <ExtraBlockView type={block.type} content={block.content ?? ''} />
   if (block.type === 'HEADING') {
     return block.headingLevel === 'TITLE'
       ? <h3 className="mt-5 text-base font-bold leading-tight">{block.content}</h3>
@@ -40,7 +43,7 @@ function PreviewBlock({ block }: { block: ContentBlockResponse }) {
     return (
       <div className="rounded border border-slate-200 p-2">
         <p className="text-[7px] font-bold uppercase tracking-wide text-slate-500">Ejercicio</p>
-        <p className="mt-1 whitespace-pre-wrap text-[10px] leading-[1.5]"><span aria-hidden="true">{block.resolved ? '☑' : '☐'}</span> {block.content}</p>
+        <p className="mt-1 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.content}</p>
         {block.description && <><p className="mt-2 text-[7px] font-bold uppercase tracking-wide text-slate-500">Resolución</p><p className="mt-1 whitespace-pre-wrap text-[10px] leading-[1.5]">{block.description}</p></>}
       </div>
     )
